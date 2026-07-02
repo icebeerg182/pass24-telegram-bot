@@ -1,0 +1,10 @@
+.env
+.env.local
+.venv/
+venv/
+__pycache__/
+*.pyc
+.Python
+*.log
+deploy/remote_deploy.log
+pass24_deploy_report.txt

@@ -1,0 +1,16 @@
+[Unit]
+Description=PASS24 Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/pass24-telegram-bot
+EnvironmentFile=/opt/pass24-telegram-bot/.env
+ExecStart=/opt/pass24-telegram-bot/.venv/bin/python -m bot.main
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
