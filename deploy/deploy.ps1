@@ -1,4 +1,4 @@
-# Deploy to Waicore from PowerShell:
+# Deploy to server from PowerShell:
 #   1. cp .env.example .env  (fill in secrets)
 #   2. .\deploy\deploy.ps1
 

@@ -1,4 +1,4 @@
-# Деплой на Waicore (Ubuntu)
+# Деплой на сервер (Ubuntu)
 
 Бот ставится **изолированно**: только `/opt/pass24-telegram-bot` и systemd unit `pass24-telegram-bot.service`. Другие сервисы не трогаются.
 
@@ -14,7 +14,7 @@
 cp .env.example .env
 ```
 
-Заполните все поля. Для деплоя по SSH добавьте `WAICORE_SSH_PASSWORD`.
+Заполните все поля. Для деплоя по SSH добавьте `DEPLOY_SSH_PASSWORD`.
 
 ## 2. Деплой с Windows (PowerShell)
 
@@ -27,7 +27,7 @@ cd C:\path\to\pass24-telegram-bot
 Или автоматически через Paramiko:
 
 ```powershell
-$env:WAICORE_SSH_PASSWORD='ваш_ssh_пароль'
+$env:DEPLOY_SSH_PASSWORD='ваш_ssh_пароль'
 # TELEGRAM_* и PASS24_* читаются из .env в корне проекта
 python deploy\remote_deploy.py
 ```

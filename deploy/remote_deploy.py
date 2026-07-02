@@ -14,11 +14,11 @@ except ImportError:
 from dotenv import load_dotenv
 
 LOCAL = Path(__file__).resolve().parent.parent
-load_dotenv(LOCAL / ".env")
+load_dotenv(LOCAL / ".env", interpolate=False)
 
-HOST = os.getenv("WAICORE_SSH_HOST", "178.17.52.193")
-USER = os.getenv("WAICORE_SSH_USER", "root")
-PASSWORD = os.getenv("WAICORE_SSH_PASSWORD", "")
+HOST = os.getenv("DEPLOY_SSH_HOST") or os.getenv("WAICORE_SSH_HOST", "178.17.52.193")
+USER = os.getenv("DEPLOY_SSH_USER") or os.getenv("WAICORE_SSH_USER", "root")
+PASSWORD = (os.getenv("DEPLOY_SSH_PASSWORD") or os.getenv("WAICORE_SSH_PASSWORD") or "").strip()
 REMOTE = "/opt/pass24-telegram-bot"
 
 FILES_TO_UPLOAD = [
@@ -38,6 +38,7 @@ REMOTE_DIR="/opt/pass24-telegram-bot"
 SERVICE="pass24-telegram-bot.service"
 cd "$REMOTE_DIR"
 find "$REMOTE_DIR" -type f \( -name "*.sh" -o -name "*.py" -o -name "*.service" \) -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+mkdir -p "$REMOTE_DIR/data"
 sed -i 's/\r$//' "$REMOTE_DIR/.env" 2>/dev/null || true
 if ! python3 -m venv /tmp/_pass24_venv_test 2>/dev/null; then
   export DEBIAN_FRONTEND=noninteractive
@@ -79,7 +80,18 @@ def upload_dir(sftp, local: Path, remote: str) -> None:
 
 def main() -> int:
     if not PASSWORD:
-        print("Set WAICORE_SSH_PASSWORD in .env", file=sys.stderr)
+        env_path = LOCAL / ".env"
+        print(f"Set DEPLOY_SSH_PASSWORD in {env_path}", file=sys.stderr)
+        if env_path.exists():
+            keys = []
+            for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    keys.append(line.split("=", 1)[0].strip())
+            ssh_keys = [k for k in keys if "SSH" in k.upper()]
+            if ssh_keys:
+                print(f"Found SSH keys in .env: {', '.join(ssh_keys)}", file=sys.stderr)
+                print("Use DEPLOY_SSH_PASSWORD (not WAICORE_*). Quote passwords with $ or ;", file=sys.stderr)
         return 1
     if not (LOCAL / ".env").exists():
         print("Create .env from .env.example", file=sys.stderr)

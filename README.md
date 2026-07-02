@@ -34,18 +34,33 @@ toyota к777кк197
 
 Номер должен быть **полным**: буква + 3 цифры + 2 буквы + регион (2–3 цифры).
 
+**Тип ТС** выбирается кнопками после отправки марки и номера (легковой / грузовой).
+
+## Доступ к боту
+
+1. Узнать свой ID: `/myid` (или [@userinfobot](https://t.me/userinfobot))
+2. В `.env` указать `TELEGRAM_ADMIN_USER_IDS=ваш_id`
+3. Админ добавляет людей: `/allow 123456789`
+4. Новый пользователь пишет боту `/start` — доступ есть
+
+Список из `/allow` хранится в `data/allowed_users.json` на сервере (переживает перезапуск).
+
 ## Переменные окружения
 
 | Переменная | Описание |
 |---|---|
 | `TELEGRAM_BOT_TOKEN` | Токен от [@BotFather](https://t.me/BotFather) |
-| `TELEGRAM_ALLOWED_USER_IDS` | Telegram user ID через запятую (рекомендуется) |
+| `TELEGRAM_ALLOWED_USER_IDS` | Telegram user ID через запятую (базовый список в `.env`) |
+| `TELEGRAM_ADMIN_USER_IDS` | Админы бота: `/allow`, `/deny`, `/users` |
 | `PASS24_PHONE` | Телефон входа в приложение PASS24 |
 | `PASS24_PASSWORD` | Пароль PASS24 |
 | `PASS24_ADDRESS_KEYWORD` | Подстрока в названии адреса |
 | `PASS24_PASS_HOURS` | Длительность разового пропуска (по умолчанию 24) |
+| `DEPLOY_SSH_HOST` | Хост для `deploy/remote_deploy.py` (по умолчанию IP сервера) |
+| `DEPLOY_SSH_USER` | SSH-пользователь (обычно `root`) |
+| `DEPLOY_SSH_PASSWORD` | SSH-пароль для автоматического деплоя |
 
-## Деплой на сервер (Waicore / Ubuntu)
+## Деплой на сервер (Ubuntu)
 
 Подробно: [docs/DEPLOY.md](docs/DEPLOY.md)
 
@@ -56,7 +71,7 @@ toyota к777кк197
 .\deploy\deploy.ps1
 
 # Или с паролем SSH (без интерактива)
-$env:WAICORE_SSH_PASSWORD='...'
+$env:DEPLOY_SSH_PASSWORD='...'
 python deploy\remote_deploy.py
 ```
 

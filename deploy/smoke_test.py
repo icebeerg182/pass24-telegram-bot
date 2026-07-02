@@ -20,3 +20,12 @@ client.login()
 print("login ok")
 print("address:", client.get_address_name())
 print("models:", len(client.get_vehicle_models()))
+
+types = client.get_vehicle_types()
+print("vehicle types:", len(types))
+for name, vid in types.items():
+    print(f"  {vid}: {name}")
+try:
+    print("resolved vehicle type:", client.resolve_vehicle_type_id())
+except Exception as e:
+    print("resolve vehicle type error:", e)

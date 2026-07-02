@@ -1,7 +1,7 @@
 import re
 from dataclasses import dataclass
 
-from .brands import resolve_brand
+from .brands import resolve_brand, suggest_brands
 
 PLATE_RE = re.compile(
     r"(?i)([авекмнорстухabekmhopctyx]\d{3}[авекмнорстухabekmhopctyx]{2}\d{2,3})"
@@ -66,9 +66,14 @@ def parse_message(text: str, pass24_models: dict[str, int]) -> ParsedPass:
                     break
 
     if not canonical:
+        hints = suggest_brands(before, pass24_models)
+        extra = ""
+        if hints:
+            extra = "\n\nВозможно: " + ", ".join(hints)
         raise ParseError(
             f"Не удалось определить марку из «{before}».\n"
-            "Попробуйте другое сокращение или полное название."
+            "Попробуйте сокращение (мерс, бмв, жигули) или название из приложения PASS24."
+            f"{extra}"
         )
 
     return ParsedPass(
