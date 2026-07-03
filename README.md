@@ -2,7 +2,7 @@
 
 Telegram-бот для заказа **автомобильных пропусков** через mobile API жителя [PASS24.online](https://pass24online.ru/).
 
-**Версия:** 0.0.1 · **Репозиторий:** [github.com/icebeerg182/pass24-telegram-bot](https://github.com/icebeerg182/pass24-telegram-bot)
+**Версия:** 0.0.1 
 
 ## Для кого
 
