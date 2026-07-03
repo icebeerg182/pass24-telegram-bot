@@ -43,15 +43,19 @@ class AccessControl:
             log.warning("Cannot read %s: %s", self.store_path, e)
 
     def _save(self) -> None:
-        self.store_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "allowed": sorted(self.dynamic_allowed),
-            "public_until": self.public_until,
-        }
-        self.store_path.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        try:
+            self.store_path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "allowed": sorted(self.dynamic_allowed),
+                "public_until": self.public_until,
+            }
+            self.store_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+        except OSError as e:
+            log.error("Cannot write %s: %s", self.store_path, e)
+            raise RuntimeError(f"Не удалось сохранить настройки доступа: {e}") from e
 
     def _expire_public_if_needed(self) -> None:
         if self.public_until and time.time() >= self.public_until:

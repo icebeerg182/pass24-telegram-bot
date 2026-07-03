@@ -328,7 +328,13 @@ async def cmd_open(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(f"Допустимо только: {', '.join(map(str, PUBLIC_HOURS))} часов.")
         return
 
-    until = ACCESS.open_public(hours)
+    try:
+        until = ACCESS.open_public(hours)
+    except Exception as e:
+        log.exception("open_public failed")
+        await update.message.reply_text(f"❌ Не удалось открыть доступ: {e}")
+        return
+
     log.info("Public access opened for %s h until %s by admin %s", hours, until, _user_id(update))
     await update.message.reply_text(
         f"✅ Готово.\n\n"
@@ -342,7 +348,13 @@ async def cmd_open(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 @admin_only
 async def cmd_close(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if ACCESS.close_public():
+    try:
+        closed = ACCESS.close_public()
+    except Exception as e:
+        log.exception("close_public failed")
+        await update.message.reply_text(f"❌ Не удалось закрыть доступ: {e}")
+        return
+    if closed:
         log.info("Public access closed by admin %s", _user_id(update))
         await update.message.reply_text(
             "✅ Готово.\n\n"
@@ -652,6 +664,15 @@ def main() -> None:
         .post_init(_setup_bot_commands)
         .build()
     )
+
+    async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        log.exception("Unhandled error", exc_info=context.error)
+        if isinstance(update, Update) and update.effective_message:
+            await update.effective_message.reply_text(
+                f"❌ Ошибка бота: {context.error}"
+            )
+
+    app.add_error_handler(on_error)
     app.add_handler(CommandHandler("myid", cmd_myid))
     app.add_handler(CommandHandler("allow", cmd_allow))
     app.add_handler(CommandHandler("deny", cmd_deny))
