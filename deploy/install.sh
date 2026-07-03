@@ -42,7 +42,7 @@ ensure_project_root() {
   info "Репозиторий не найден в $INSTALL_DIR"
   echo ""
   echo "Сначала клонируйте проект, например:"
-  echo "  git clone git@github.com:YOUR_USER/pass24-telegram-bot.git $INSTALL_DIR"
+  echo "  git clone https://github.com/icebeerg182/pass24-telegram-bot.git $INSTALL_DIR"
   echo "  cd $INSTALL_DIR && bash deploy/install.sh"
   exit 1
 }
