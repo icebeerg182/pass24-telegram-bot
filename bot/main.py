@@ -6,7 +6,17 @@ from dataclasses import dataclass
 from functools import wraps
 
 from dotenv import load_dotenv
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
+from telegram import (
+    BotCommand,
+    BotCommandScopeChat,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    Message,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+    Update,
+)
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -80,6 +90,48 @@ def get_client() -> Pass24ApiClient:
 def _user_id(update: Update) -> int | None:
     user = update.effective_user
     return user.id if user else None
+
+
+def _admin_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton("/myid"), KeyboardButton("/users")],
+            [
+                KeyboardButton("/open 12"),
+                KeyboardButton("/open 24"),
+                KeyboardButton("/open 48"),
+            ],
+            [KeyboardButton("/close")],
+            [KeyboardButton("/allow"), KeyboardButton("/deny"), KeyboardButton("/help")],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
+
+
+async def _setup_bot_commands(application: Application) -> None:
+    default_cmds = [
+        BotCommand("start", "Начало работы"),
+        BotCommand("help", "Справка"),
+        BotCommand("myid", "Мой Telegram ID"),
+    ]
+    await application.bot.set_my_commands(default_cmds)
+
+    admin_cmds = default_cmds + [
+        BotCommand("users", "Список доступа"),
+        BotCommand("allow", "Выдать доступ (нужен ID)"),
+        BotCommand("deny", "Забрать доступ (нужен ID)"),
+        BotCommand("open", "Открыть для всех на N часов"),
+        BotCommand("close", "Закрыть временный доступ"),
+    ]
+    for admin_id in ACCESS.admins:
+        try:
+            await application.bot.set_my_commands(
+                admin_cmds,
+                scope=BotCommandScopeChat(chat_id=admin_id),
+            )
+        except Exception as e:
+            log.warning("Cannot set admin menu for %s: %s", admin_id, e)
 
 
 def _pass_keyboard(pass_id: int) -> InlineKeyboardMarkup:
@@ -322,6 +374,8 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         addr = client.get_address_name()
     except Exception as e:
         addr = f"(ошибка: {e})"
+    uid = _user_id(update)
+    markup = _admin_keyboard() if ACCESS.is_admin(uid) else ReplyKeyboardRemove()
     await update.message.reply_text(
         "Бот заказа пропусков PASS24.\n\n"
         f"Адрес: {addr}\n\n"
@@ -334,6 +388,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/help — справка\n"
         "/myid — ваш Telegram ID",
         parse_mode="HTML",
+        reply_markup=markup,
     )
 
 
@@ -558,6 +613,7 @@ def main() -> None:
     app = (
         Application.builder()
         .token(token)
+        .post_init(_setup_bot_commands)
         .build()
     )
     app.add_handler(CommandHandler("myid", cmd_myid))
