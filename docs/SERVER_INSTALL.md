@@ -1,52 +1,30 @@
-# Установка на сервер (Docker, с нуля)
+# Установка на сервер (Docker)
 
-Версия **0.0.1**. Бот работает в одном контейнере `pass24-telegram-bot`.  
-Другие сервисы на сервере **не затрагиваются**.
-
----
-
-## Шаг 0. Остановить старый systemd-бот (если был)
-
-```bash
-systemctl stop pass24-telegram-bot.service 2>/dev/null || true
-systemctl disable pass24-telegram-bot.service 2>/dev/null || true
-```
+Версия **0.0.1**. Бот работает в контейнере `pass24-telegram-bot` (long polling).  
+**Порты на сервере открывать не нужно.**
 
 ---
 
-## Шаг 1. Сохранить `.env`
+## Требования
 
-```bash
-cp /opt/pass24-telegram-bot/.env /root/pass24.env.backup
-```
-
-Если файла нет — создадите на шаге 4 из `.env.example`.
+- Linux с **Docker** и **Docker Compose v2**
+- Исходящий HTTPS: `api.telegram.org`, `mobile-api.pass24online.ru`
+- Файл `.env` с секретами (в Git не хранится)
 
 ---
 
-## Шаг 2. Удалить старую установку
+## 1. Подготовка
 
 ```bash
+# если обновляете установку — сохраните настройки
+[ -f /opt/pass24-telegram-bot/.env ] && cp /opt/pass24-telegram-bot/.env /root/pass24.env.backup
+
 rm -rf /opt/pass24-telegram-bot
+
+docker --version && docker compose version
 ```
 
-Опционально убрать systemd unit:
-
-```bash
-rm -f /etc/systemd/system/pass24-telegram-bot.service
-systemctl daemon-reload
-```
-
----
-
-## Шаг 3. Установить Docker (если нет)
-
-```bash
-docker --version
-docker compose version
-```
-
-Если не установлен:
+Если Docker не установлен:
 
 ```bash
 apt-get update
@@ -56,26 +34,27 @@ systemctl enable --now docker
 
 ---
 
-## Шаг 4. Клонировать репозиторий
-
-```bash
-git clone git@github.com:YOUR_GITHUB_USER/pass24-telegram-bot.git /opt/pass24-telegram-bot
-cd /opt/pass24-telegram-bot
-```
-
-HTTPS (если SSH не настроен на сервере):
+## 2. Клонировать репозиторий
 
 ```bash
 git clone https://github.com/YOUR_GITHUB_USER/pass24-telegram-bot.git /opt/pass24-telegram-bot
+cd /opt/pass24-telegram-bot
+```
+
+SSH (если настроен ключ на сервере):
+
+```bash
+git clone git@github.com:YOUR_GITHUB_USER/pass24-telegram-bot.git /opt/pass24-telegram-bot
 ```
 
 ---
 
-## Шаг 5. Настроить `.env`
+## 3. Настроить `.env`
 
 ```bash
 cp /root/pass24.env.backup .env
 # или: cp .env.example .env && nano .env
+
 chmod 600 .env
 mkdir -p data
 ```
@@ -92,16 +71,15 @@ PASS24_ADDRESS_KEYWORD=
 
 ---
 
-## Шаг 6. Запустить
+## 4. Запустить
 
 ```bash
-cd /opt/pass24-telegram-bot
 docker compose up -d --build
 ```
 
 ---
 
-## Шаг 7. Проверка
+## Проверка
 
 ```bash
 docker compose ps
@@ -110,6 +88,12 @@ docker compose logs -f --tail=50
 
 В Telegram: `/start` → `BMW А121МР77`
 
+Проверка PASS24 API:
+
+```bash
+docker compose exec pass24-telegram-bot python deploy/smoke_test.py
+```
+
 ---
 
 ## Обновление
@@ -117,34 +101,16 @@ docker compose logs -f --tail=50
 ```bash
 cd /opt/pass24-telegram-bot
 git pull
-docker compose up -d --build
+bash deploy/docker-up.sh
 ```
 
 ---
 
 ## Полезные команды
 
-```bash
-docker compose restart          # перезапуск
-docker compose down             # остановка
-docker compose logs -f          # логи
-```
-
----
-
-## Если на сервере нет SSH-ключа для GitHub
-
-На сервере:
-
-```bash
-ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519_github
-cat ~/.ssh/id_ed25519_github.pub
-```
-
-Добавьте ключ в GitHub → Settings → SSH keys, затем:
-
-```bash
-git clone git@github.com:YOUR_GITHUB_USER/pass24-telegram-bot.git /opt/pass24-telegram-bot
-```
-
-Или клонируйте по HTTPS (для private repo понадобится Personal Access Token).
+| Команда | Действие |
+|---|---|
+| `docker compose ps` | Статус |
+| `docker compose logs -f` | Логи |
+| `docker compose restart` | Перезапуск |
+| `docker compose down` | Остановка |

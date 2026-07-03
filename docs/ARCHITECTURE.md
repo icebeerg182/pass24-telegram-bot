@@ -9,8 +9,6 @@
 bot/parser.py + bot/brands.py
     │  Mercedes-Benz, А121МР777
     ▼
-Подтверждение (inline-кнопки)
-    ▼
 pass24_api_client.Pass24ApiClient
     │  JWT в теле запроса (как в мобильном приложении)
     ▼

@@ -7,5 +7,3 @@ __pycache__/
 .Python
 *.log
 data/allowed_users.json
-deploy/remote_deploy.log
-pass24_deploy_report.txt

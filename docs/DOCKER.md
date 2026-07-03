@@ -35,7 +35,3 @@ bash deploy/docker-up.sh
 | `docker compose restart` | Перезапуск |
 | `docker compose down` | Остановка |
 | `docker compose exec pass24-telegram-bot python deploy/smoke_test.py` | Проверка PASS24 API |
-
-## Legacy: systemd
-
-Файлы `deploy/install.sh` и `pass24-telegram-bot.service` оставлены в репозитории, но **не используются**. Запуск только через Docker.

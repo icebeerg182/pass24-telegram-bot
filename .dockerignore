@@ -9,12 +9,8 @@ __pycache__
 .env.local
 *.log
 data/
-deploy/_*
-deploy/remote_deploy.log
-pass24_deploy_report.txt
-README.md
 docs/
-deploy/git_publish.ps1
-deploy/setup-github.ps1
-deploy/remote_deploy.py
-deploy/deploy.ps1
+README.md
+CHANGELOG.md
+deploy/*
+!deploy/smoke_test.py
