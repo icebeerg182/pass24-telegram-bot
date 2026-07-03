@@ -14,3 +14,4 @@ README.md
 CHANGELOG.md
 deploy/*
 !deploy/smoke_test.py
+!deploy/docker-entrypoint.sh
