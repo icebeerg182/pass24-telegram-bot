@@ -43,3 +43,5 @@ mobile-api.pass24online.ru/v1/passes
 | Кто использует | Приложение PASS24.online | Админка / интеграции УК |
 
 Бот использует **mobile API**, как мобильное приложение жителя.
+
+Клиент `pass24_api_client/` основан на [dmtrbrlkv/pass24](https://github.com/dmtrbrlkv/pass24).
