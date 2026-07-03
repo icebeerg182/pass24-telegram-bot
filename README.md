@@ -99,8 +99,6 @@ docs/
 
 Клиент `pass24_api_client/` основан на [dmtrbrlkv/pass24](https://github.com/dmtrbrlkv/pass24) — Python-клиент mobile API `mobile-api.pass24online.ru`.
 
-Этот репозиторий — **отдельный проект** (Telegram-бот, Docker, парсер марок, управление доступом), а не форк на GitHub. Исходный репозиторий — веб-форма на Flask; здесь только идея и клиент API.
-
 ## Лицензия
 
 Проект не аффилирован с PASS24.online. Используйте на свой риск; API может измениться без предупреждения.
