@@ -329,23 +329,35 @@ async def cmd_open(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     until = ACCESS.open_public(hours)
+    log.info("Public access opened for %s h until %s by admin %s", hours, until, _user_id(update))
     await update.message.reply_text(
+        f"✅ Готово.\n\n"
         f"🌐 Бот открыт для всех на {hours} ч.\n"
-        f"До: {until.strftime('%d.%m.%Y %H:%M')} (МСК)\n\n"
+        f"До: <b>{until.strftime('%d.%m.%Y %H:%M')}</b> (МСК)\n\n"
         "Можно пересылать ссылку на бота.\n"
-        "Досрочно закрыть: /close"
+        "Досрочно закрыть: /close",
+        parse_mode="HTML",
     )
 
 
 @admin_only
 async def cmd_close(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if ACCESS.close_public():
+        log.info("Public access closed by admin %s", _user_id(update))
         await update.message.reply_text(
+            "✅ Готово.\n\n"
             "🔒 Временный доступ закрыт.\n"
             "Снова только доверенные пользователи."
         )
     else:
-        await update.message.reply_text("Временный доступ сейчас не активен.")
+        await update.message.reply_text(
+            "ℹ️ Временный доступ сейчас не активен.\n"
+            + (
+                "Бот и так открыт всем (пустые списки доступа в .env)."
+                if ACCESS.is_open()
+                else "Открыть: /open 12, /open 24 или /open 48."
+            )
+        )
 
 
 @admin_only
@@ -537,6 +549,30 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _create_and_reply(update, parsed, creating_msg)
 
 
+async def on_plain_slash_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Кнопки клавиатуры шлют /open 12 как текст без entity bot_command."""
+    text = (update.message.text or "").strip()
+    if not text.startswith("/"):
+        return
+    parts = text.split()
+    cmd = parts[0].split("@")[0].lower()
+    context.args = parts[1:]
+
+    routes = {
+        "/start": cmd_start,
+        "/help": cmd_help,
+        "/myid": cmd_myid,
+        "/allow": cmd_allow,
+        "/deny": cmd_deny,
+        "/open": cmd_open,
+        "/close": cmd_close,
+        "/users": cmd_users,
+    }
+    handler = routes.get(cmd)
+    if handler:
+        await handler(update, context)
+
+
 @allowed_only
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
@@ -624,6 +660,10 @@ def main() -> None:
     app.add_handler(CommandHandler("users", cmd_users))
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
+    # Кнопки ReplyKeyboard: "/open 12" без bot_command entity
+    app.add_handler(
+        MessageHandler(filters.Regex(r"^/\w+") & ~filters.COMMAND, on_plain_slash_command)
+    )
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     app.add_handler(CallbackQueryHandler(on_callback))
 
