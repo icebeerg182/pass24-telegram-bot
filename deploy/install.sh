@@ -241,6 +241,47 @@ prompt_pass24() {
   PASS24_VEHICLE_TYPE_KEYWORD="${PASS24_VEHICLE_TYPE_KEYWORD:-легков}"
   read -rp "PASS24_PASS_HOURS [$PASS24_PASS_HOURS]: " _hours
   if [ -n "$_hours" ]; then PASS24_PASS_HOURS="$_hours"; fi
+
+  if [ -n "$addresses" ]; then
+    ADDRESS_COUNT="$(echo "$addresses" | wc -l | tr -d ' ')"
+  else
+    ADDRESS_COUNT=0
+  fi
+}
+
+prompt_yes_no() {
+  local label="$1"
+  local var_name="$2"
+  local default="${3:-n}"
+  local hint="y/N"
+  [ "$default" = "y" ] && hint="Y/n"
+  read -rp "$label [$hint]: " ans
+  ans="${ans:-$default}"
+  if [[ "$ans" =~ ^[YyДд]$ ]]; then
+    printf -v "$var_name" '%s' 'true'
+  else
+    printf -v "$var_name" '%s' 'false'
+  fi
+}
+
+prompt_bot_settings() {
+  echo ""
+  info "Настройки поведения бота"
+
+  prompt_yes_no "Спрашивать тип ТС (легковой/грузовой) при заказе?" BOT_ASK_VEHICLE_TYPE n
+  if [ "$BOT_ASK_VEHICLE_TYPE" != "true" ]; then
+    read -rp "Тип ТС по умолчанию [легков/грузовой] ($PASS24_VEHICLE_TYPE_KEYWORD): " _vt
+    if [ -n "$_vt" ]; then PASS24_VEHICLE_TYPE_KEYWORD="$_vt"; fi
+  fi
+
+  prompt_yes_no "Спрашивать подтверждение перед созданием пропуска?" BOT_CONFIRM_BEFORE_CREATE y
+
+  if [ "${ADDRESS_COUNT:-0}" -gt 1 ]; then
+    prompt_yes_no "Добавить кнопку выбора адреса по умолчанию?" BOT_ENABLE_ADDRESS_PICKER y
+  else
+    BOT_ENABLE_ADDRESS_PICKER=false
+    ok "Один адрес — кнопка выбора адреса не нужна"
+  fi
 }
 
 write_env() {
@@ -260,6 +301,10 @@ PASS24_ADDRESS_KEYWORD=$PASS24_ADDRESS_KEYWORD
 PASS24_PASS_HOURS=$PASS24_PASS_HOURS
 PASS24_VEHICLE_TYPE_KEYWORD=$PASS24_VEHICLE_TYPE_KEYWORD
 PASS24_VEHICLE_TYPE_ID=
+
+BOT_ASK_VEHICLE_TYPE=$BOT_ASK_VEHICLE_TYPE
+BOT_CONFIRM_BEFORE_CREATE=$BOT_CONFIRM_BEFORE_CREATE
+BOT_ENABLE_ADDRESS_PICKER=$BOT_ENABLE_ADDRESS_PICKER
 EOF
   chmod 600 "$ENV_FILE"
   ok ".env создан"
@@ -328,6 +373,7 @@ main() {
 
   prompt_telegram
   prompt_pass24
+  prompt_bot_settings
   write_env
   final_validate
   start_bot

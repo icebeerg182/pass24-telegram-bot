@@ -46,6 +46,19 @@ PASS24_ADDRESS_KEYWORD = os.getenv("PASS24_ADDRESS_KEYWORD", "")
 PASS24_PASS_HOURS = int(os.getenv("PASS24_PASS_HOURS", "24"))
 PASS24_VEHICLE_TYPE_KEYWORD = os.getenv("PASS24_VEHICLE_TYPE_KEYWORD", "легков")
 
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    val = os.getenv(name, "").strip().lower()
+    if not val:
+        return default
+    return val in ("1", "true", "yes", "y", "on", "да")
+
+
+BOT_ASK_VEHICLE_TYPE = _env_bool("BOT_ASK_VEHICLE_TYPE")
+BOT_CONFIRM_BEFORE_CREATE = _env_bool("BOT_CONFIRM_BEFORE_CREATE")
+BOT_ENABLE_ADDRESS_PICKER = _env_bool("BOT_ENABLE_ADDRESS_PICKER")
+ADDRESS_BUTTON_LABEL = "📍 Адрес"
+
 ACCESS = AccessControl(
     env_allowed={
         int(x.strip())
@@ -93,20 +106,51 @@ def _user_id(update: Update) -> int | None:
 
 
 def _admin_keyboard() -> ReplyKeyboardMarkup:
-    return ReplyKeyboardMarkup(
+    rows = [
+        [KeyboardButton("/myid"), KeyboardButton("/users")],
         [
-            [KeyboardButton("/myid"), KeyboardButton("/users")],
-            [
-                KeyboardButton("/open 12"),
-                KeyboardButton("/open 24"),
-                KeyboardButton("/open 48"),
-            ],
-            [KeyboardButton("/close")],
-            [KeyboardButton("/allow"), KeyboardButton("/deny"), KeyboardButton("/help")],
+            KeyboardButton("/open 12"),
+            KeyboardButton("/open 24"),
+            KeyboardButton("/open 48"),
         ],
+        [KeyboardButton("/close")],
+        [KeyboardButton("/allow"), KeyboardButton("/deny"), KeyboardButton("/help")],
+    ]
+    if BOT_ENABLE_ADDRESS_PICKER:
+        rows.insert(0, [KeyboardButton(ADDRESS_BUTTON_LABEL)])
+    return ReplyKeyboardMarkup(
+        rows,
         resize_keyboard=True,
         is_persistent=True,
     )
+
+
+def _user_keyboard() -> ReplyKeyboardMarkup | ReplyKeyboardRemove:
+    if BOT_ENABLE_ADDRESS_PICKER:
+        return ReplyKeyboardMarkup(
+            [[KeyboardButton(ADDRESS_BUTTON_LABEL)]],
+            resize_keyboard=True,
+            is_persistent=True,
+        )
+    return ReplyKeyboardRemove()
+
+
+def _reply_keyboard_for_user(uid: int | None) -> ReplyKeyboardMarkup | ReplyKeyboardRemove:
+    if ACCESS.is_admin(uid):
+        return _admin_keyboard()
+    return _user_keyboard()
+
+
+def _user_address_id(context: ContextTypes.DEFAULT_TYPE) -> int | None:
+    value = context.user_data.get("address_id")
+    return int(value) if value is not None else None
+
+
+def _current_address_name(client: Pass24ApiClient, context: ContextTypes.DEFAULT_TYPE) -> str:
+    try:
+        return client.get_address_name(address_id=_user_address_id(context))
+    except Exception as e:
+        return f"(ошибка: {e})"
 
 
 async def _setup_bot_commands(application: Application) -> None:
@@ -156,6 +200,41 @@ def _delete_confirm_keyboard(pass_id: int) -> InlineKeyboardMarkup:
     )
 
 
+def _vehicle_type_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("🚗 Легковой", callback_data="vtype:легков"),
+                InlineKeyboardButton("🚛 Грузовой", callback_data="vtype:грузовой"),
+            ],
+            [InlineKeyboardButton("❌ Отмена", callback_data="pcreate:no")],
+        ]
+    )
+
+
+def _pass_confirm_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("✅ Создать пропуск", callback_data="pcreate:yes"),
+                InlineKeyboardButton("❌ Отмена", callback_data="pcreate:no"),
+            ]
+        ]
+    )
+
+
+def _address_keyboard(addresses: list[dict], selected_id: int | None) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for addr in addresses:
+        addr_id = addr.get("id")
+        name = addr.get("name") or addr.get("title") or str(addr_id)
+        prefix = "✓ " if selected_id == addr_id else ""
+        rows.append(
+            [InlineKeyboardButton(f"{prefix}{name}", callback_data=f"addr:{addr_id}")]
+        )
+    return InlineKeyboardMarkup(rows)
+
+
 def _format_pass_message(result: dict, header: str = "✅ Пропуск создан") -> str:
     guest = result.get("guestData") or {}
     plate = guest.get("plateNumber", "—")
@@ -195,12 +274,19 @@ async def _safe_delete_message(message: Message | None) -> None:
         log.debug("Could not delete message: %s", e)
 
 
+def _reply_target(update: Update) -> Message | None:
+    return update.effective_message
+
+
 async def _reply_pass_error(update: Update, client: Pass24ApiClient, e: Exception) -> None:
+    target = _reply_target(update)
+    if not target:
+        return
     if isinstance(e, AuthError):
         client.invalidate_token()
-        await update.message.reply_text(f"Ошибка авторизации PASS24: {e}")
+        await target.reply_text(f"Ошибка авторизации PASS24: {e}")
     elif isinstance(e, AddressError):
-        await update.message.reply_text(f"Ошибка адреса: {e}")
+        await target.reply_text(f"Ошибка адреса: {e}")
     elif isinstance(e, RequestError):
         client.invalidate_token()
         try:
@@ -208,12 +294,12 @@ async def _reply_pass_error(update: Update, client: Pass24ApiClient, e: Exceptio
             type_hint = ", ".join(f"{n} ({i})" for n, i in types.items()) if types else "не найдены"
         except Exception:
             type_hint = "не удалось получить"
-        await update.message.reply_text(
+        await target.reply_text(
             f"Ошибка PASS24: {e}\n\nТипы ТС для адреса: {type_hint}"
         )
     else:
         log.exception("pass error")
-        await update.message.reply_text(f"Неожиданная ошибка: {e}")
+        await target.reply_text(f"Неожиданная ошибка: {e}")
 
 
 async def _deny_access(update: Update) -> None:
@@ -394,23 +480,30 @@ async def cmd_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 @allowed_only
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     client = get_client()
-    try:
-        addr = client.get_address_name()
-    except Exception as e:
-        addr = f"(ошибка: {e})"
+    addr = _current_address_name(client, context)
     uid = _user_id(update)
-    markup = _admin_keyboard() if ACCESS.is_admin(uid) else ReplyKeyboardRemove()
+    markup = _reply_keyboard_for_user(uid)
+
+    hints = ["Отправьте марку и госномер."]
+    if BOT_ASK_VEHICLE_TYPE:
+        hints.append("Перед заказом бот спросит тип ТС: легковой или грузовой.")
+    if BOT_CONFIRM_BEFORE_CREATE:
+        hints.append("Перед созданием пропуска будет запрошено подтверждение.")
+    if BOT_ENABLE_ADDRESS_PICKER:
+        hints.append(f"Кнопка «{ADDRESS_BUTTON_LABEL}» — выбор адреса по умолчанию.")
+
     await update.message.reply_text(
-        "Бот заказа пропусков PASS24.\n\n"
-        f"Адрес: {addr}\n\n"
-        "Отправьте марку и госномер — пропуск создаётся сразу.\n"
-        "Под сообщением о пропуске можно изменить или удалить его.\n\n"
-        "Примеры:\n"
-        "<code>мерс А121МР777</code>\n"
-        "<code>А121МР77 BMW</code>\n"
-        "<code>BMW А 121 МР 77</code>\n\n"
-        "/help — справка\n"
-        "/myid — ваш Telegram ID",
+        (
+            "Бот заказа пропусков PASS24.\n\n"
+            f"Адрес: {addr}\n\n"
+            + "\n".join(hints)
+            + "\n\nПримеры:\n"
+            "<code>мерс А121МР777</code>\n"
+            "<code>А121МР77 BMW</code>\n"
+            "<code>BMW А 121 МР 77</code>\n\n"
+            "/help — справка\n"
+            "/myid — ваш Telegram ID"
+        ),
         parse_mode="HTML",
         reply_markup=markup,
     )
@@ -429,17 +522,26 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f"/open <{hours_list}> — открыть бот для всех на N часов\n"
             "/close — закрыть временный доступ"
         )
-    await update.message.reply_text(
-        "Форматы сообщения (марка и номер в любом порядке):\n"
-        "• мерс А121МР777\n"
-        "• А121МР77 BMW\n"
-        "• BMW А121МР77 серый\n"
-        "• BMW А 121 МР 77\n"
-        "• в две строки: BMW + номер\n\n"
-        "После создания — кнопки «Изменить» и «Удалить».\n"
-        f"Пропуск разовый на {PASS24_PASS_HOURS} ч."
-        f"{admin_help}"
-    )
+    parts = [
+        "Форматы сообщения (марка и номер в любом порядке):\n",
+        "• мерс А121МР777\n",
+        "• А121МР77 BMW\n",
+        "• BMW А121МР77 серый\n",
+        "• BMW А 121 МР 77\n",
+        "• в две строки: BMW + номер\n\n",
+        "После создания — кнопки «Изменить» и «Удалить».\n",
+        f"Пропуск разовый на {PASS24_PASS_HOURS} ч.\n",
+    ]
+    if BOT_ENABLE_ADDRESS_PICKER:
+        parts.append(f"Кнопка «{ADDRESS_BUTTON_LABEL}» — сменить адрес по умолчанию.\n")
+    if BOT_ASK_VEHICLE_TYPE:
+        parts.append("Перед заказом бот спросит тип ТС (легковой/грузовой).\n")
+    if BOT_CONFIRM_BEFORE_CREATE:
+        parts.append("Перед созданием пропуска бот запросит подтверждение.\n")
+    else:
+        parts.append("Пропуск создаётся сразу после распознавания марки и номера.\n")
+
+    await update.message.reply_text("".join(parts) + admin_help)
 
 
 async def _send_pass_created(
@@ -448,25 +550,164 @@ async def _send_pass_created(
     creating_msg: Message | None = None,
 ) -> None:
     await _safe_delete_message(creating_msg)
+    target = _reply_target(update)
+    if not target:
+        return
     pass_id = result.get("id")
     if not pass_id:
-        await update.message.reply_text(_format_pass_message(result))
+        await target.reply_text(_format_pass_message(result))
         return
 
-    msg = await update.message.reply_text(
+    msg = await target.reply_text(
         _format_pass_message(result),
         reply_markup=_pass_keyboard(pass_id),
     )
     _register_pass_ui(pass_id, msg, update.effective_user.id, msg.text)
 
 
-async def _create_and_reply(update: Update, parsed, creating_msg: Message | None = None) -> None:
+def _clear_pending_pass(context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.user_data.pop("pending_pass", None)
+
+
+def _pending_pass_preview(pending: dict, address_name: str) -> str:
+    vehicle_type = pending.get("vehicle_type")
+    type_line = f"\n🚛 Тип: {vehicle_type}" if vehicle_type else ""
+    return (
+        f"🚗 {pending['brand']}\n"
+        f"🔢 {pending['plate']}"
+        f"{type_line}\n"
+        f"📍 {address_name}\n"
+        f"⏱ {PASS24_PASS_HOURS} ч."
+    )
+
+
+async def _create_pending_pass(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    creating_msg: Message | None = None,
+) -> None:
+    pending = context.user_data.get("pending_pass")
+    if not pending:
+        return
+
+    client = get_client()
+    address_id = _user_address_id(context)
+    vehicle_type = pending.get("vehicle_type")
+    try:
+        result = client.create_pass(
+            plate_number=pending["plate"],
+            vehicle_model=pending["brand"],
+            expiration_hours=PASS24_PASS_HOURS,
+            vehicle_type_keyword=vehicle_type or PASS24_VEHICLE_TYPE_KEYWORD,
+            address_id=address_id,
+        )
+        _clear_pending_pass(context)
+        await _send_pass_created(update, result, creating_msg)
+    except (AuthError, AddressError, RequestError, Exception) as e:
+        await _safe_delete_message(creating_msg)
+        await _reply_pass_error(update, client, e)
+
+
+async def _ask_vehicle_type_step(update: Update, pending: dict) -> None:
+    preview = _pending_pass_preview(pending, "—")
+    await update.message.reply_text(
+        f"{preview}\n\nВыберите тип транспорта:",
+        reply_markup=_vehicle_type_keyboard(),
+    )
+
+
+async def _ask_confirm_step(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    pending: dict,
+) -> None:
+    client = get_client()
+    address_name = _current_address_name(client, context)
+    preview = _pending_pass_preview(pending, address_name)
+    await update.message.reply_text(
+        f"Проверьте данные:\n\n{preview}\n\nСоздать пропуск?",
+        reply_markup=_pass_confirm_keyboard(),
+    )
+
+
+async def _continue_pass_flow(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    *,
+    after_vehicle_type: bool = False,
+) -> None:
+    pending = context.user_data.get("pending_pass")
+    if not pending:
+        return
+
+    if BOT_ASK_VEHICLE_TYPE and not after_vehicle_type and not pending.get("vehicle_type"):
+        await _ask_vehicle_type_step(update, pending)
+        return
+
+    if BOT_CONFIRM_BEFORE_CREATE:
+        await _ask_confirm_step(update, context, pending)
+        return
+
+    creating_msg = await update.message.reply_text("Создаю пропуск…")
+    await _create_pending_pass(update, context, creating_msg)
+
+
+async def _begin_pass_flow(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    parsed,
+) -> None:
+    context.user_data["pending_pass"] = {
+        "brand": parsed.brand_canonical,
+        "plate": parsed.plate,
+    }
+    await _continue_pass_flow(update, context)
+
+
+async def _show_address_picker(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    client = get_client()
+    try:
+        addresses = client.list_addresses()
+    except Exception as e:
+        await update.message.reply_text(f"Не удалось получить адреса: {e}")
+        return
+
+    if not addresses:
+        await update.message.reply_text("В аккаунте нет доступных адресов.")
+        return
+
+    selected_id = _user_address_id(context)
+    if len(addresses) == 1:
+        only = addresses[0]
+        context.user_data["address_id"] = only.get("id")
+        await update.message.reply_text(
+            f"Адрес: {only.get('name', '—')}",
+            reply_markup=_reply_keyboard_for_user(_user_id(update)),
+        )
+        return
+
+    await update.message.reply_text(
+        "Выберите адрес по умолчанию для пропусков:",
+        reply_markup=_address_keyboard(addresses, selected_id),
+    )
+
+
+async def _create_and_reply(
+    update: Update,
+    parsed,
+    context: ContextTypes.DEFAULT_TYPE,
+    creating_msg: Message | None = None,
+) -> None:
     client = get_client()
     try:
         result = client.create_pass(
             plate_number=parsed.plate,
             vehicle_model=parsed.brand_canonical,
             expiration_hours=PASS24_PASS_HOURS,
+            address_id=_user_address_id(context),
         )
         await _send_pass_created(update, result, creating_msg)
     except (AuthError, AddressError, RequestError, Exception) as e:
@@ -533,6 +774,10 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text or ""
     client = get_client()
 
+    if BOT_ENABLE_ADDRESS_PICKER and text.strip() == ADDRESS_BUTTON_LABEL:
+        await _show_address_picker(update, context)
+        return
+
     editing_pass_id = context.user_data.get("editing_pass_id")
     if editing_pass_id:
         try:
@@ -555,10 +800,14 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(f"Ошибка: {e}")
         return
 
+    if BOT_ASK_VEHICLE_TYPE or BOT_CONFIRM_BEFORE_CREATE:
+        await _begin_pass_flow(update, context, parsed)
+        return
+
     creating_msg = await update.message.reply_text(
         f"🚗 {parsed.brand_canonical}\n🔢 {parsed.plate}\n\nСоздаю пропуск…"
     )
-    await _create_and_reply(update, parsed, creating_msg)
+    await _create_and_reply(update, parsed, context, creating_msg)
 
 
 async def on_plain_slash_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -591,6 +840,55 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await query.answer()
     uid = update.effective_user.id
     data = query.data or ""
+
+    if data.startswith("vtype:"):
+        pending = context.user_data.get("pending_pass")
+        if not pending:
+            await query.edit_message_text("Заказ устарел. Отправьте марку и номер снова.")
+            return
+        pending["vehicle_type"] = data.split(":", 1)[1]
+        if BOT_CONFIRM_BEFORE_CREATE:
+            client = get_client()
+            address_name = _current_address_name(client, context)
+            preview = _pending_pass_preview(pending, address_name)
+            await query.edit_message_text(
+                f"Проверьте данные:\n\n{preview}\n\nСоздать пропуск?",
+                reply_markup=_pass_confirm_keyboard(),
+            )
+            return
+        await query.edit_message_text("Создаю пропуск…", reply_markup=None)
+        creating_msg = query.message
+        await _create_pending_pass(update, context, creating_msg)
+        return
+
+    if data.startswith("pcreate:"):
+        action = data.split(":", 1)[1]
+        if action == "no":
+            _clear_pending_pass(context)
+            await query.edit_message_text("❌ Заказ пропуска отменён.")
+            return
+        pending = context.user_data.get("pending_pass")
+        if not pending:
+            await query.edit_message_text("Заказ устарел. Отправьте марку и номер снова.")
+            return
+        await query.edit_message_text("Создаю пропуск…", reply_markup=None)
+        await _create_pending_pass(update, context, query.message)
+        return
+
+    if data.startswith("addr:"):
+        try:
+            address_id = int(data.split(":", 1)[1])
+        except ValueError:
+            return
+        client = get_client()
+        try:
+            name = client.get_address_name(address_id=address_id)
+        except Exception as e:
+            await query.edit_message_text(f"Не удалось выбрать адрес: {e}")
+            return
+        context.user_data["address_id"] = address_id
+        await query.edit_message_text(f"✅ Адрес по умолчанию: {name}")
+        return
 
     if data.startswith("pedit:"):
         pass_id = int(data.split(":", 1)[1])
@@ -694,7 +992,15 @@ def main() -> None:
         mode = "open"
     else:
         mode = f"restricted ({len(ACCESS.all_allowed())} users)"
-    log.info("Starting bot v%s (address: %s, access: %s)", __version__, PASS24_ADDRESS_KEYWORD, mode)
+    log.info(
+        "Starting bot v%s (address: %s, ask_vtype=%s, confirm=%s, addr_picker=%s, access: %s)",
+        __version__,
+        PASS24_ADDRESS_KEYWORD,
+        BOT_ASK_VEHICLE_TYPE,
+        BOT_CONFIRM_BEFORE_CREATE,
+        BOT_ENABLE_ADDRESS_PICKER,
+        mode,
+    )
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 

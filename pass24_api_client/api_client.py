@@ -207,6 +207,20 @@ class Pass24ApiClient:
         ]
         return matched or []
 
+    def list_addresses(self) -> list[dict]:
+        json_data = self.get("profile/addresses")
+        if json_data.get("error"):
+            raise RequestError(json_data["error"])
+        return json_data.get("body") or []
+
+    def _address_record_for(self, address_id: int | None = None) -> dict:
+        if address_id is not None:
+            for addr in self.list_addresses():
+                if addr.get("id") == address_id:
+                    return addr
+            raise AddressError(f"Адрес id={address_id} не найден")
+        return self._get_address_record()
+
     def _get_address_record(self) -> dict:
         if self._address_record is not None:
             return self._address_record
@@ -232,27 +246,13 @@ class Pass24ApiClient:
 
         return self._address_record
 
-    def get_vehicle_types(self) -> dict[str, int]:
-        if self.vehicle_types is not None:
-            return self.vehicle_types
-
+    def _vehicle_types_for_address(self, addr: dict) -> dict[str, int]:
         types: dict[str, int] = {}
+        types.update(self._collect_types_from_record(addr))
 
-        # 1. Типы из выбранного адреса (как в мобильном приложении).
-        try:
-            addr = self._get_address_record()
-            types.update(self._collect_types_from_record(addr))
-        except (AddressError, RequestError):
-            pass
-
-        # 2. Типы из объекта, привязанного к адресу.
         if not types:
+            object_id = addr.get("objectId") or addr.get("object", {}).get("id")
             try:
-                addr = self._get_address_record()
-                object_id = (
-                    addr.get("objectId")
-                    or addr.get("object", {}).get("id")
-                )
                 json_data = self.get("profile/objects")
                 if not json_data.get("error"):
                     for obj in json_data.get("body") or []:
@@ -269,10 +269,9 @@ class Pass24ApiClient:
             except (ResponseStatusError, RequestError):
                 pass
 
-        # 3. Эндпоинты с привязкой к addressId.
         if not types:
-            try:
-                addr_id = self.get_address_id()
+            addr_id = addr.get("id")
+            if addr_id is not None:
                 for path in (
                     "passes/vehicle-types",
                     "passes/transport-types",
@@ -285,10 +284,7 @@ class Pass24ApiClient:
                             break
                     except ResponseStatusError:
                         pass
-            except (AddressError, RequestError):
-                pass
 
-        # 3b. Из недавних пропусков (если в приложении уже заказывали).
         if not types:
             try:
                 json_data = self.get("passes")
@@ -315,7 +311,38 @@ class Pass24ApiClient:
             except (ResponseStatusError, RequestError):
                 pass
 
-        # 4. Глобальный справочник — только если объектные типы не найдены.
+        if not types:
+            for path in ("vehicle-types", "transport-types", "dictionaries/vehicle-types"):
+                try:
+                    json_data = self.get(path)
+                    if not json_data.get("error") and json_data.get("body"):
+                        self._merge_vehicle_types(types, json_data["body"])
+                        break
+                except ResponseStatusError:
+                    pass
+
+        return types
+
+    def get_vehicle_types(self, address_id: int | None = None) -> dict[str, int]:
+        if address_id is None and self.vehicle_types is not None:
+            return self.vehicle_types
+
+        addr = self._address_record_for(address_id)
+        types = self._vehicle_types_for_address(addr)
+
+        if address_id is None:
+            self.vehicle_types = types
+        return types
+
+    def resolve_vehicle_type_id(
+        self,
+        keyword: str | None = None,
+        address_id: int | None = None,
+    ) -> int:
+        if self._vehicle_type_id_override is not None and keyword is None:
+            return self._vehicle_type_id_override
+
+        types = self.get_vehicle_types(address_id=address_id)
         if not types:
             for path in ("vehicle-types", "vehicleTypes", "transport-types"):
                 try:
@@ -333,19 +360,10 @@ class Pass24ApiClient:
                 except ResponseStatusError:
                     pass
 
-        self.vehicle_types = types
-        return self.vehicle_types
-
-    def resolve_vehicle_type_id(self, keyword: str | None = None) -> int:
-        if self._vehicle_type_id_override is not None and keyword is None:
-            return self._vehicle_type_id_override
-
-        types = self.get_vehicle_types()
         if not types:
             raise RequestError(
                 "Не удалось получить типы ТС для адреса из PASS24. "
-                "Запустите: python deploy/discover_types.py "
-                "и задайте PASS24_VEHICLE_TYPE_ID в .env."
+                "Задайте PASS24_VEHICLE_TYPE_ID в .env."
             )
 
         search = (keyword or self.vehicle_type_keyword or "легков").lower()
@@ -353,7 +371,6 @@ class Pass24ApiClient:
             if search in name.lower():
                 return vid
 
-        # частые названия
         for name, vid in types.items():
             low = name.lower()
             if search.startswith("груз"):
@@ -374,15 +391,17 @@ class Pass24ApiClient:
         lower_map = {k.lower(): v for k, v in models.items()}
         return lower_map.get(brand_name.lower())
 
-    def get_address_id(self) -> int:
+    def get_address_id(self, address_id: int | None = None) -> int:
+        if address_id is not None:
+            return address_id
         if self._address_id is not None:
             return self._address_id
 
         self._address_id = self._get_address_record()["id"]
         return self._address_id
 
-    def get_address_name(self) -> str:
-        addr = self._get_address_record()
+    def get_address_name(self, address_id: int | None = None) -> str:
+        addr = self._address_record_for(address_id)
         return addr.get("name", "—")
 
     def create_pass(
@@ -391,6 +410,7 @@ class Pass24ApiClient:
         vehicle_model: str,
         expiration_hours: int = 24,
         vehicle_type_keyword: str | None = None,
+        address_id: int | None = None,
     ) -> dict:
         model_id = self.resolve_model_id(vehicle_model)
         if not model_id:
@@ -398,13 +418,16 @@ class Pass24ApiClient:
         if not model_id:
             raise RequestError(f"Марка «{vehicle_model}» не найдена в справочнике PASS24")
 
-        vehicle_type_id = self.resolve_vehicle_type_id(keyword=vehicle_type_keyword)
+        vehicle_type_id = self.resolve_vehicle_type_id(
+            keyword=vehicle_type_keyword,
+            address_id=address_id,
+        )
 
         starts_at = datetime.datetime.now(MSK) + datetime.timedelta(minutes=1)
         expires_at = starts_at + datetime.timedelta(hours=expiration_hours)
 
         body = {
-            "addressId": self.get_address_id(),
+            "addressId": self.get_address_id(address_id),
             "durationType": 1,
             "guestType": 1,
             "guestData": {
