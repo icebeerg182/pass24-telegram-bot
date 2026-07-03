@@ -2,18 +2,21 @@
 """Telegram-бот для заказа пропусков PASS24 (житель)."""
 import logging
 import os
+from dataclasses import dataclass
 from functools import wraps
 
 from dotenv import load_dotenv
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
 from telegram.ext import (
     Application,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
     filters,
 )
 
+from bot import __version__
 from bot.access import AccessControl, PUBLIC_HOURS
 from bot.parser import ParseError, parse_message
 from pass24_api_client import Pass24ApiClient
@@ -49,6 +52,19 @@ ACCESS = AccessControl(
 _client: Pass24ApiClient | None = None
 
 
+@dataclass
+class PassUiRecord:
+    chat_id: int
+    message_id: int
+    user_id: int
+    pass_id: int
+    text: str
+
+
+# pass_id -> UI message (для кнопок изменить/удалить)
+_pass_ui: dict[int, PassUiRecord] = {}
+
+
 def get_client() -> Pass24ApiClient:
     global _client
     if _client is None:
@@ -64,6 +80,88 @@ def get_client() -> Pass24ApiClient:
 def _user_id(update: Update) -> int | None:
     user = update.effective_user
     return user.id if user else None
+
+
+def _pass_keyboard(pass_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("✏️ Изменить", callback_data=f"pedit:{pass_id}"),
+                InlineKeyboardButton("🗑 Удалить", callback_data=f"pdel:{pass_id}"),
+            ]
+        ]
+    )
+
+
+def _delete_confirm_keyboard(pass_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("✅ Да, удалить", callback_data=f"pdely:{pass_id}"),
+                InlineKeyboardButton("❌ Отмена", callback_data=f"pdeln:{pass_id}"),
+            ]
+        ]
+    )
+
+
+def _format_pass_message(result: dict, header: str = "✅ Пропуск создан") -> str:
+    guest = result.get("guestData") or {}
+    plate = guest.get("plateNumber", "—")
+    model = guest.get("model", {})
+    model_name = model.get("name") if isinstance(model, dict) else guest.get("model") or "—"
+    starts = result.get("startsAt", "—")
+    expires = result.get("expiresAt", "—")
+    number = result.get("number", "")
+    return (
+        header
+        + (f" №{number}" if number else "")
+        + f"\n🚗 {model_name}\n🔢 {plate}\n"
+        f"🕐 {starts} — {expires}"
+    )
+
+
+def _register_pass_ui(pass_id: int, message: Message, user_id: int, text: str) -> None:
+    _pass_ui[pass_id] = PassUiRecord(
+        chat_id=message.chat_id,
+        message_id=message.message_id,
+        user_id=user_id,
+        pass_id=pass_id,
+        text=text,
+    )
+
+
+def _get_pass_ui(pass_id: int) -> PassUiRecord | None:
+    return _pass_ui.get(pass_id)
+
+
+async def _safe_delete_message(message: Message | None) -> None:
+    if not message:
+        return
+    try:
+        await message.delete()
+    except Exception as e:
+        log.debug("Could not delete message: %s", e)
+
+
+async def _reply_pass_error(update: Update, client: Pass24ApiClient, e: Exception) -> None:
+    if isinstance(e, AuthError):
+        client.invalidate_token()
+        await update.message.reply_text(f"Ошибка авторизации PASS24: {e}")
+    elif isinstance(e, AddressError):
+        await update.message.reply_text(f"Ошибка адреса: {e}")
+    elif isinstance(e, RequestError):
+        client.invalidate_token()
+        try:
+            types = client.get_vehicle_types()
+            type_hint = ", ".join(f"{n} ({i})" for n, i in types.items()) if types else "не найдены"
+        except Exception:
+            type_hint = "не удалось получить"
+        await update.message.reply_text(
+            f"Ошибка PASS24: {e}\n\nТипы ТС для адреса: {type_hint}"
+        )
+    else:
+        log.exception("pass error")
+        await update.message.reply_text(f"Неожиданная ошибка: {e}")
 
 
 async def _deny_access(update: Update) -> None:
@@ -227,12 +325,12 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "Бот заказа пропусков PASS24.\n\n"
         f"Адрес: {addr}\n\n"
-        "Отправьте марку и госномер — пропуск создаётся сразу.\n\n"
+        "Отправьте марку и госномер — пропуск создаётся сразу.\n"
+        "Под сообщением о пропуске можно изменить или удалить его.\n\n"
         "Примеры:\n"
         "<code>мерс А121МР777</code>\n"
         "<code>А121МР77 BMW</code>\n"
-        "<code>BMW А 121 МР 77</code>\n"
-        "<code>BMW А121МР77 серый</code>\n\n"
+        "<code>BMW А 121 МР 77</code>\n\n"
         "/help — справка\n"
         "/myid — ваш Telegram ID",
         parse_mode="HTML",
@@ -259,13 +357,31 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "• BMW А121МР77 серый\n"
         "• BMW А 121 МР 77\n"
         "• в две строки: BMW + номер\n\n"
-        "Цвет и модель (5er и т.п.) игнорируются.\n"
+        "После создания — кнопки «Изменить» и «Удалить».\n"
         f"Пропуск на «{PASS24_ADDRESS_KEYWORD}», разовый на {PASS24_PASS_HOURS} ч."
         f"{admin_help}"
     )
 
 
-async def _create_pass_reply(update: Update, parsed) -> None:
+async def _send_pass_created(
+    update: Update,
+    result: dict,
+    creating_msg: Message | None = None,
+) -> None:
+    await _safe_delete_message(creating_msg)
+    pass_id = result.get("id")
+    if not pass_id:
+        await update.message.reply_text(_format_pass_message(result))
+        return
+
+    msg = await update.message.reply_text(
+        _format_pass_message(result),
+        reply_markup=_pass_keyboard(pass_id),
+    )
+    _register_pass_ui(pass_id, msg, update.effective_user.id, msg.text)
+
+
+async def _create_and_reply(update: Update, parsed, creating_msg: Message | None = None) -> None:
     client = get_client()
     try:
         result = client.create_pass(
@@ -273,42 +389,82 @@ async def _create_pass_reply(update: Update, parsed) -> None:
             vehicle_model=parsed.brand_canonical,
             expiration_hours=PASS24_PASS_HOURS,
         )
-        plate = result.get("guestData", {}).get("plateNumber", parsed.plate)
-        model = result.get("guestData", {}).get("model", {}).get("name", parsed.brand_canonical)
-        starts = result.get("startsAt", "—")
-        expires = result.get("expiresAt", "—")
-        number = result.get("number", "")
-        msg = (
-            f"✅ Пропуск создан"
-            + (f" №{number}" if number else "")
-            + f"\n🚗 {model}\n🔢 {plate}\n"
-            f"🕐 {starts} — {expires}"
+        await _send_pass_created(update, result, creating_msg)
+    except (AuthError, AddressError, RequestError, Exception) as e:
+        await _safe_delete_message(creating_msg)
+        await _reply_pass_error(update, client, e)
+
+
+async def _update_pass_and_reply(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    pass_id: int,
+    parsed,
+) -> None:
+    client = get_client()
+    ui = _get_pass_ui(pass_id)
+    progress = await update.message.reply_text("Обновляю пропуск…")
+
+    try:
+        result = client.update_pass(
+            pass_id=pass_id,
+            plate_number=parsed.plate,
+            vehicle_model=parsed.brand_canonical,
         )
-        await update.message.reply_text(msg)
-    except AuthError as e:
-        client.invalidate_token()
-        await update.message.reply_text(f"Ошибка авторизации PASS24: {e}")
-    except AddressError as e:
-        await update.message.reply_text(f"Ошибка адреса: {e}")
-    except RequestError as e:
-        client.invalidate_token()
-        try:
-            types = client.get_vehicle_types()
-            type_hint = ", ".join(f"{n} ({i})" for n, i in types.items()) if types else "не найдены"
-        except Exception:
-            type_hint = "не удалось получить"
-        await update.message.reply_text(
-            f"Ошибка PASS24: {e}\n\nТипы ТС для адреса: {type_hint}"
-        )
-    except Exception as e:
-        log.exception("create_pass")
-        await update.message.reply_text(f"Неожиданная ошибка: {e}")
+        new_pass_id = result.get("id", pass_id)
+        text = _format_pass_message(result, header="✅ Пропуск обновлён")
+
+        if ui:
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=ui.chat_id,
+                    message_id=ui.message_id,
+                    text=text,
+                    reply_markup=_pass_keyboard(new_pass_id),
+                )
+                if new_pass_id != pass_id:
+                    _pass_ui.pop(pass_id, None)
+                _pass_ui[new_pass_id] = PassUiRecord(
+                    ui.chat_id,
+                    ui.message_id,
+                    update.effective_user.id,
+                    new_pass_id,
+                    text,
+                )
+            except Exception:
+                msg = await update.message.reply_text(
+                    text, reply_markup=_pass_keyboard(new_pass_id)
+                )
+                _register_pass_ui(new_pass_id, msg, update.effective_user.id, text)
+        else:
+            msg = await update.message.reply_text(
+                text, reply_markup=_pass_keyboard(new_pass_id)
+            )
+            _register_pass_ui(new_pass_id, msg, update.effective_user.id, text)
+
+        await _safe_delete_message(progress)
+        context.user_data.pop("editing_pass_id", None)
+    except (AuthError, AddressError, RequestError, Exception) as e:
+        await _safe_delete_message(progress)
+        await _reply_pass_error(update, client, e)
 
 
 @allowed_only
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text or ""
     client = get_client()
+
+    editing_pass_id = context.user_data.get("editing_pass_id")
+    if editing_pass_id:
+        try:
+            models = client.get_vehicle_models()
+            parsed = parse_message(text, models)
+        except ParseError as e:
+            await update.message.reply_text(str(e))
+            return
+        await _update_pass_and_reply(update, context, int(editing_pass_id), parsed)
+        return
+
     try:
         models = client.get_vehicle_models()
         parsed = parse_message(text, models)
@@ -320,10 +476,81 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(f"Ошибка: {e}")
         return
 
-    await update.message.reply_text(
+    creating_msg = await update.message.reply_text(
         f"🚗 {parsed.brand_canonical}\n🔢 {parsed.plate}\n\nСоздаю пропуск…"
     )
-    await _create_pass_reply(update, parsed)
+    await _create_and_reply(update, parsed, creating_msg)
+
+
+@allowed_only
+async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    uid = update.effective_user.id
+    data = query.data or ""
+
+    if data.startswith("pedit:"):
+        pass_id = int(data.split(":", 1)[1])
+        ui = _get_pass_ui(pass_id)
+        if not ui or ui.user_id != uid:
+            await query.answer("Нет доступа к этому пропуску", show_alert=True)
+            return
+        context.user_data["editing_pass_id"] = pass_id
+        await query.edit_message_text(
+            ui.text + "\n\n✏️ Отправьте новую марку и госномер:",
+            reply_markup=None,
+        )
+        return
+
+    if data.startswith("pdel:"):
+        pass_id = int(data.split(":", 1)[1])
+        ui = _get_pass_ui(pass_id)
+        if not ui or ui.user_id != uid:
+            await query.answer("Нет доступа к этому пропуску", show_alert=True)
+            return
+        await query.edit_message_text(
+            ui.text + "\n\n🗑 Удалить этот пропуск?",
+            reply_markup=_delete_confirm_keyboard(pass_id),
+        )
+        return
+
+    if data.startswith("pdeln:"):
+        pass_id = int(data.split(":", 1)[1])
+        ui = _get_pass_ui(pass_id)
+        if not ui or ui.user_id != uid:
+            return
+        await query.edit_message_text(
+            ui.text,
+            reply_markup=_pass_keyboard(pass_id),
+        )
+        return
+
+    if data.startswith("pdely:"):
+        pass_id = int(data.split(":", 1)[1])
+        ui = _get_pass_ui(pass_id)
+        if not ui or ui.user_id != uid:
+            await query.answer("Нет доступа", show_alert=True)
+            return
+
+        client = get_client()
+        await query.edit_message_text(ui.text + "\n\nУдаляю…", reply_markup=None)
+        try:
+            client.delete_pass(pass_id)
+            _pass_ui.pop(pass_id, None)
+            await query.edit_message_text("🗑 Пропуск удалён", reply_markup=None)
+        except (AuthError, RequestError) as e:
+            client.invalidate_token()
+            await query.edit_message_text(
+                f"Не удалось удалить пропуск: {e}",
+                reply_markup=_pass_keyboard(pass_id),
+            )
+        except Exception as e:
+            log.exception("delete_pass")
+            await query.edit_message_text(
+                f"Ошибка при удалении: {e}",
+                reply_markup=_pass_keyboard(pass_id),
+            )
+        return
 
 
 def main() -> None:
@@ -342,6 +569,7 @@ def main() -> None:
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+    app.add_handler(CallbackQueryHandler(on_callback))
 
     if ACCESS.is_public_active():
         mode = f"public until {ACCESS.public_status()}"
@@ -349,7 +577,7 @@ def main() -> None:
         mode = "open"
     else:
         mode = f"restricted ({len(ACCESS.all_allowed())} users)"
-    log.info("Starting bot (address: %s, access: %s)", PASS24_ADDRESS_KEYWORD, mode)
+    log.info("Starting bot v%s (address: %s, access: %s)", __version__, PASS24_ADDRESS_KEYWORD, mode)
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 

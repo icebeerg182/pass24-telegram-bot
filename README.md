@@ -1,24 +1,37 @@
 # PASS24 Telegram Bot
 
+**Версия: 0.0.1**
+
 Telegram-бот для заказа **автомобильных пропусков** через API жителя [PASS24.online](https://pass24online.ru/) (`mobile-api.pass24online.ru`).
 
 Основан на клиенте [dmtrbrlkv/pass24](https://github.com/dmtrbrlkv/pass24).
 
 ## Возможности
 
-- Сообщение в чат → пропуск создаётся сразу (без подтверждения)
-- Гибкий формат: марка до или после номера, пробелы в номере, две строки
-- Словарь сокращений марок (`мерс` → Mercedes-Benz, `жигули` → ВАЗ, `li` → LiXiang, …)
-- Цвет и модель в тексте игнорируются (`BMW серый`, `5er`)
-- Фильтр адреса (например, только **«Ренессанс»** при нескольких объектах)
-- Автообновление JWT при истечении токена
-- Учётные данные PASS24 в `.env` на сервере
+- Сообщение в чат → пропуск создаётся сразу
+- Гибкий формат: марка до/после номера, пробелы, две строки
+- Словарь сокращений марок (`мерс`, `жигули`, `li` → LiXiang, …)
+- Кнопки **Изменить** и **Удалить** под созданным пропуском
+- Доступ: доверенные пользователи + временное открытие `/open 12|24|48`
+- Фильтр адреса (например, **«Ренессанс»**)
+- Запуск в **Docker** (рекомендуется) или systemd (legacy)
 
-## Быстрый старт (локально)
+## Быстрый старт (Docker)
 
 ```bash
 cp .env.example .env
 # заполнить .env
+mkdir -p data
+docker compose up -d --build
+docker compose logs -f
+```
+
+Подробно: [docs/DOCKER.md](docs/DOCKER.md)
+
+## Быстрый старт (локально без Docker)
+
+```bash
+cp .env.example .env
 python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -26,8 +39,6 @@ python -m bot.main
 ```
 
 ## Формат сообщения
-
-Марка и номер в **любом порядке**, пропуск создаётся сразу:
 
 ```
 мерс А121МР777
@@ -38,88 +49,66 @@ BMW
 A121MP77
 ```
 
-Номер: буква + 3 цифры + 2 буквы + регион (2–3 цифры). Цвет и подмодель (5er и т.п.) не мешают.
-
 ## Доступ к боту
 
-**По умолчанию** — только доверенные пользователи.
-
-1. Узнать ID: `/myid`
-2. В `.env`: `TELEGRAM_ADMIN_USER_IDS=ваш_id`
-3. Постоянный доступ: `/allow 123456789`
-
-**Временно открыть для всех** (например, переслать ссылку на бота):
-
-```
-/open 12   — на 12 часов
-/open 24   — на 24 часа
-/open 48   — на 48 часов
-/close     — закрыть досрочно
-```
-
-После истечения срока снова только доверенные пользователи.
-
-Список пользователей: `data/allowed_users.json` на сервере.
+1. `/myid` — узнать Telegram ID
+2. `.env`: `TELEGRAM_ADMIN_USER_IDS=ваш_id`
+3. `/allow 123456789` — постоянный доступ
+4. `/open 24` — открыть для всех на 24 часа (админ)
 
 ## Переменные окружения
 
 | Переменная | Описание |
 |---|---|
-| `TELEGRAM_BOT_TOKEN` | Токен от [@BotFather](https://t.me/BotFather) |
-| `TELEGRAM_ALLOWED_USER_IDS` | Telegram user ID через запятую (базовый список в `.env`) |
-| `TELEGRAM_ADMIN_USER_IDS` | Админы: `/allow`, `/deny`, `/open`, `/close`, `/users` |
-| `PASS24_PHONE` | Телефон входа в приложение PASS24 |
-| `PASS24_PASSWORD` | Пароль PASS24 |
+| `TELEGRAM_BOT_TOKEN` | Токен [@BotFather](https://t.me/BotFather) |
+| `TELEGRAM_ADMIN_USER_IDS` | Админы бота |
+| `TELEGRAM_ALLOWED_USER_IDS` | Белый список (опционально) |
+| `PASS24_PHONE` / `PASS24_PASSWORD` | Учётка PASS24 |
 | `PASS24_ADDRESS_KEYWORD` | Подстрока в названии адреса |
-| `PASS24_PASS_HOURS` | Длительность разового пропуска (по умолчанию 24) |
-| `DEPLOY_SSH_HOST` | Хост для `deploy/remote_deploy.py` (по умолчанию IP сервера) |
-| `DEPLOY_SSH_USER` | SSH-пользователь (обычно `root`) |
-| `DEPLOY_SSH_PASSWORD` | SSH-пароль для автоматического деплоя |
+| `PASS24_PASS_HOURS` | Длительность пропуска (часы) |
 
-## Деплой на сервер (Ubuntu)
+Полный список: `.env.example`
 
-Подробно: [docs/DEPLOY.md](docs/DEPLOY.md)
+## Деплой на сервер
 
-Кратко:
+| Способ | Документация |
+|---|---|
+| **Docker** (рекомендуется) | [docs/DOCKER.md](docs/DOCKER.md) |
+| Миграция systemd → Docker | [docs/MIGRATE_TO_DOCKER.md](docs/MIGRATE_TO_DOCKER.md) |
+| systemd (legacy) | [docs/DEPLOY.md](docs/DEPLOY.md) |
+
+## GitHub
+
+Публикация и теги версий: [docs/GITHUB.md](docs/GITHUB.md)
 
 ```powershell
-# Windows: залить файлы
-.\deploy\deploy.ps1
-
-# Или с паролем SSH (без интерактива)
-$env:DEPLOY_SSH_PASSWORD='...'
-python deploy\remote_deploy.py
+cd C:\Users\icebeerg\Projects\pass24-telegram-bot
+git add .
+git commit -m "Release 0.0.1: Docker deployment"
+git tag -a v0.0.1 -m "Version 0.0.1"
+git push origin main
+git push origin v0.0.1
 ```
-
-На сервере бот работает как `pass24-telegram-bot.service` в `/opt/pass24-telegram-bot`.
-
-## API
-
-Используется **мобильное API жителя**, не админский `alpha.pass24.online`:
-
-- `POST /v1/auth/login` — `phone` + `password`
-- `GET /v1/vehicle-models` — справочник марок
-- `GET /v1/profile/addresses` — адреса
-- `POST /v1/passes` — создание пропуска
 
 ## Структура проекта
 
 ```
 pass24_api_client/   # клиент PASS24 API
-bot/
-  main.py            # Telegram-бот
-  parser.py          # разбор «марка + номер»
-  brands.py          # словарь сокращений
-deploy/              # скрипты установки и systemd unit
+bot/                 # Telegram-бот
+deploy/              # скрипты деплоя
 docs/                # документация
+Dockerfile
+docker-compose.yml
+VERSION              # 0.0.1
+CHANGELOG.md
 ```
 
 ## Безопасность
 
-- **Не коммитьте** `.env` с токенами и паролями
-- Ограничьте бота через `TELEGRAM_ALLOWED_USER_IDS`
-- После настройки смените пароли, если они попадали в переписку
+- Не коммитьте `.env`
+- `data/allowed_users.json` — только на сервере
+- Ограничьте доступ через `TELEGRAM_ADMIN_USER_IDS`
 
 ## Лицензия
 
-Код API-клиента основан на открытом проекте dmtrbrlkv/pass24. Используйте на свой страх и риск; PASS24 не предоставляет публичную документацию mobile API.
+Код API-клиента основан на [dmtrbrlkv/pass24](https://github.com/dmtrbrlkv/pass24). PASS24 не публикует документацию mobile API — используйте на свой риск.

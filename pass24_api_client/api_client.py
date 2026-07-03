@@ -14,6 +14,8 @@ MSK = pytz.timezone("Europe/Moscow")
 class RequestMethod(Enum):
     GET = "get"
     POST = "post"
+    DELETE = "delete"
+    PATCH = "patch"
 
 
 class AuthError(Exception):
@@ -95,6 +97,12 @@ class Pass24ApiClient:
     def post(self, path, body=None, need_token=True, ok_status=HTTPStatus.OK, as_json=True, retry_auth=True):
         return self.request(RequestMethod.POST, path, body, need_token, ok_status, as_json, retry_auth)
 
+    def delete(self, path, body=None, need_token=True, ok_status=HTTPStatus.OK, as_json=True, retry_auth=True):
+        return self.request(RequestMethod.DELETE, path, body, need_token, ok_status, as_json, retry_auth)
+
+    def patch(self, path, body=None, need_token=True, ok_status=HTTPStatus.OK, as_json=True, retry_auth=True):
+        return self.request(RequestMethod.PATCH, path, body, need_token, ok_status, as_json, retry_auth)
+
     def request(self, method, path, body, need_token, ok_status, as_json, retry_auth=True):
         url = self.BASE_URL + path
         if need_token:
@@ -107,6 +115,10 @@ class Pass24ApiClient:
             response = requests.get(url, json=body, timeout=30)
         elif method == RequestMethod.POST:
             response = requests.post(url, json=body, timeout=30)
+        elif method == RequestMethod.DELETE:
+            response = requests.delete(url, json=body, timeout=30)
+        elif method == RequestMethod.PATCH:
+            response = requests.patch(url, json=body, timeout=30)
         else:
             raise ValueError(f"Unknown method: {method}")
 
@@ -408,3 +420,139 @@ class Pass24ApiClient:
         if json_data.get("error"):
             raise RequestError(json_data["error"])
         return json_data["body"]
+
+    def _check_api_response(self, json_data: dict) -> dict:
+        if json_data.get("error"):
+            raise RequestError(json_data["error"])
+        return json_data.get("body") or json_data.get("data") or {}
+
+    def _try_pass_actions(
+        self,
+        pass_id: int,
+        action_paths: list[tuple],
+        require_id: bool = False,
+    ) -> dict:
+        """Пробует несколько эндпоинтов mobile API (у PASS24 нет публичной документации)."""
+        id_body = {"id": pass_id, "passId": pass_id}
+        last_error: Exception | None = None
+
+        for item in action_paths:
+            method, path, extra_body = item
+            body = dict(id_body)
+            if extra_body:
+                body.update(extra_body)
+            try:
+                if method == RequestMethod.POST:
+                    json_data = self.post(path, body)
+                elif method == RequestMethod.DELETE:
+                    json_data = self.delete(path, body)
+                elif method == RequestMethod.PATCH:
+                    json_data = self.patch(path, body)
+                elif method == RequestMethod.GET:
+                    json_data = self.get(path, body)
+                else:
+                    continue
+                if json_data.get("error"):
+                    last_error = RequestError(json_data["error"])
+                    continue
+                result = self._check_api_response(json_data) if json_data else {}
+                if require_id and not (isinstance(result, dict) and result.get("id")):
+                    continue
+                return result
+            except (ResponseStatusError, RequestError) as e:
+                last_error = e
+                continue
+
+        if last_error:
+            raise last_error
+        if require_id:
+            raise RequestError(f"Не удалось выполнить операцию с пропуском {pass_id}")
+        return {}
+
+    def get_pass(self, pass_id: int) -> dict:
+        result = self._try_pass_actions(
+            pass_id,
+            [
+                (RequestMethod.GET, f"passes/{pass_id}", None),
+                (RequestMethod.POST, f"passes/{pass_id}", None),
+                (RequestMethod.POST, "passes/details", None),
+                (RequestMethod.POST, "passes/get", None),
+            ],
+            require_id=True,
+        )
+        return result
+
+    def delete_pass(self, pass_id: int) -> None:
+        self._try_pass_actions(
+            pass_id,
+            [
+                (RequestMethod.POST, f"passes/{pass_id}/delete", None),
+                (RequestMethod.POST, "passes/delete", None),
+                (RequestMethod.POST, f"passes/{pass_id}/cancel", None),
+                (RequestMethod.POST, "passes/cancel", None),
+                (RequestMethod.POST, f"passes/{pass_id}/close", None),
+                (RequestMethod.POST, "passes/close", None),
+                (RequestMethod.POST, f"passes/{pass_id}/status/60", None),
+                (RequestMethod.POST, "passes/set-status", {"status": 60}),
+                (RequestMethod.DELETE, f"passes/{pass_id}", None),
+            ],
+        )
+
+    def update_pass(
+        self,
+        pass_id: int,
+        plate_number: str,
+        vehicle_model: str,
+        vehicle_type_keyword: str | None = None,
+    ) -> dict:
+        model_id = self.resolve_model_id(vehicle_model)
+        if not model_id:
+            model_id = self.resolve_model_id("Не задана")
+        if not model_id:
+            raise RequestError(f"Марка «{vehicle_model}» не найдена в справочнике PASS24")
+
+        vehicle_type_id = self.resolve_vehicle_type_id(keyword=vehicle_type_keyword)
+
+        try:
+            existing = self.get_pass(pass_id)
+        except RequestError:
+            existing = {}
+
+        body = {
+            "id": pass_id,
+            "addressId": existing.get("address", {}).get("id") or self.get_address_id(),
+            "durationType": existing.get("durationType", 1),
+            "guestType": existing.get("guestType", 1),
+            "guestData": {
+                "vehicleType": vehicle_type_id,
+                "modelId": model_id,
+                "plateNumber": plate_number,
+            },
+            "startsAt": existing.get("startsAt"),
+            "expiresAt": existing.get("expiresAt"),
+            "options": existing.get("options") or [None],
+        }
+
+        try:
+            return self._try_pass_actions(
+                pass_id,
+                [
+                    (RequestMethod.POST, f"passes/{pass_id}/update", body),
+                    (RequestMethod.POST, "passes/update", body),
+                    (RequestMethod.PATCH, f"passes/{pass_id}", body),
+                    (RequestMethod.POST, f"passes/{pass_id}", body),
+                ],
+                require_id=True,
+            )
+        except RequestError:
+            # Запасной вариант: закрыть старый и создать новый
+            try:
+                self.delete_pass(pass_id)
+            except RequestError:
+                pass
+            return self.create_pass(
+                plate_number=plate_number,
+                vehicle_model=vehicle_model,
+                expiration_hours=int(os.getenv("PASS24_PASS_HOURS", "24")),
+                vehicle_type_keyword=vehicle_type_keyword,
+            )

@@ -1,0 +1,12 @@
+services:
+  pass24-telegram-bot:
+    build: .
+    image: pass24-telegram-bot:0.0.1
+    container_name: pass24-telegram-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    # Изолированный контейнер: не трогает другие сервисы на хосте.
+    # Порты наружу не пробрасываем — бот работает через long polling Telegram.

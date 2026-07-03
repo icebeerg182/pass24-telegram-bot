@@ -1,5 +1,8 @@
 # Деплой на сервер (Ubuntu)
 
+> **Рекомендуется:** [DOCKER.md](DOCKER.md) и [MIGRATE_TO_DOCKER.md](MIGRATE_TO_DOCKER.md)  
+> Ниже — **legacy**-установка через systemd (Python venv).
+
 Бот ставится **изолированно**: только `/opt/pass24-telegram-bot` и systemd unit `pass24-telegram-bot.service`. Другие сервисы не трогаются.
 
 ## Требования на сервере
