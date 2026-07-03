@@ -1,13 +1,19 @@
-"""Управление доступом к боту (список Telegram user ID)."""
+"""Управление доступом к боту (список Telegram user ID + временное открытие)."""
 from __future__ import annotations
 
 import json
 import logging
+import time
+from datetime import datetime
 from pathlib import Path
+
+import pytz
 
 log = logging.getLogger("pass24-bot.access")
 
+MSK = pytz.timezone("Europe/Moscow")
 DEFAULT_STORE = Path(__file__).resolve().parent.parent / "data" / "allowed_users.json"
+PUBLIC_HOURS = (12, 24, 48)
 
 
 class AccessControl:
@@ -20,28 +26,67 @@ class AccessControl:
         self.env_allowed = set(env_allowed)
         self.admins = set(env_admins)
         self.store_path = store_path or DEFAULT_STORE
-        self.dynamic_allowed = self._load()
+        self.dynamic_allowed: set[int] = set()
+        self.public_until: float | None = None
+        self._load()
 
-    def _load(self) -> set[int]:
+    def _load(self) -> None:
         if not self.store_path.exists():
-            return set()
+            return
         try:
             data = json.loads(self.store_path.read_text(encoding="utf-8"))
-            return {int(x) for x in data.get("allowed", [])}
+            self.dynamic_allowed = {int(x) for x in data.get("allowed", [])}
+            raw_until = data.get("public_until")
+            self.public_until = float(raw_until) if raw_until else None
+            self._expire_public_if_needed()
         except (json.JSONDecodeError, OSError, TypeError, ValueError) as e:
             log.warning("Cannot read %s: %s", self.store_path, e)
-            return set()
 
     def _save(self) -> None:
         self.store_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"allowed": sorted(self.dynamic_allowed)}
+        payload = {
+            "allowed": sorted(self.dynamic_allowed),
+            "public_until": self.public_until,
+        }
         self.store_path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
 
+    def _expire_public_if_needed(self) -> None:
+        if self.public_until and time.time() >= self.public_until:
+            self.public_until = None
+            self._save()
+            log.info("Public access window expired")
+
+    def is_public_active(self) -> bool:
+        self._expire_public_if_needed()
+        return self.public_until is not None and time.time() < self.public_until
+
+    def public_status(self) -> str | None:
+        if not self.is_public_active():
+            return None
+        until = datetime.fromtimestamp(self.public_until, tz=MSK)
+        return until.strftime("%d.%m.%Y %H:%M")
+
+    def open_public(self, hours: int) -> datetime:
+        if hours not in PUBLIC_HOURS:
+            raise ValueError(f"hours must be one of {PUBLIC_HOURS}")
+        self.public_until = time.time() + hours * 3600
+        self._save()
+        return datetime.fromtimestamp(self.public_until, tz=MSK)
+
+    def close_public(self) -> bool:
+        if not self.public_until:
+            return False
+        self.public_until = None
+        self._save()
+        return True
+
     def is_open(self) -> bool:
-        """Пустые списки = доступ всем (не рекомендуется)."""
+        """Пустые списки без админов = доступ всем (не рекомендуется)."""
+        if self.is_public_active():
+            return True
         return not (self.env_allowed or self.dynamic_allowed or self.admins)
 
     def all_allowed(self) -> set[int]:
@@ -53,12 +98,13 @@ class AccessControl:
     def is_allowed(self, user_id: int | None) -> bool:
         if user_id is None:
             return False
+        if self.is_public_active():
+            return True
         if self.is_open():
             return True
         return user_id in self.all_allowed()
 
     def allow(self, user_id: int) -> bool:
-        """True если пользователь добавлен впервые."""
         if user_id in self.all_allowed():
             return False
         self.dynamic_allowed.add(user_id)
@@ -66,7 +112,6 @@ class AccessControl:
         return True
 
     def deny(self, user_id: int) -> bool:
-        """True если пользователь был в динамическом списке."""
         if user_id in self.env_allowed or user_id in self.admins:
             return False
         if user_id not in self.dynamic_allowed:
