@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 LOCAL = Path(__file__).resolve().parent.parent
 load_dotenv(LOCAL / ".env", interpolate=False)
 
-HOST = os.getenv("DEPLOY_SSH_HOST") or os.getenv("WAICORE_SSH_HOST", "178.17.52.193")
+HOST = (os.getenv("DEPLOY_SSH_HOST") or os.getenv("WAICORE_SSH_HOST") or "").strip()
 USER = os.getenv("DEPLOY_SSH_USER") or os.getenv("WAICORE_SSH_USER", "root")
 PASSWORD = (os.getenv("DEPLOY_SSH_PASSWORD") or os.getenv("WAICORE_SSH_PASSWORD") or "").strip()
 REMOTE = "/opt/pass24-telegram-bot"
@@ -79,6 +79,9 @@ def upload_dir(sftp, local: Path, remote: str) -> None:
 
 
 def main() -> int:
+    if not HOST:
+        print("Set DEPLOY_SSH_HOST in .env (see .env.example)", file=sys.stderr)
+        return 1
     if not PASSWORD:
         env_path = LOCAL / ".env"
         print(f"Set DEPLOY_SSH_PASSWORD in {env_path}", file=sys.stderr)

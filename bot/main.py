@@ -32,7 +32,7 @@ log = logging.getLogger("pass24-bot")
 
 PASS24_PHONE = os.environ["PASS24_PHONE"]
 PASS24_PASSWORD = os.environ["PASS24_PASSWORD"]
-PASS24_ADDRESS_KEYWORD = os.getenv("PASS24_ADDRESS_KEYWORD", "Ренессанс")
+PASS24_ADDRESS_KEYWORD = os.getenv("PASS24_ADDRESS_KEYWORD", "")
 PASS24_PASS_HOURS = int(os.getenv("PASS24_PASS_HOURS", "24"))
 PASS24_VEHICLE_TYPE_KEYWORD = os.getenv("PASS24_VEHICLE_TYPE_KEYWORD", "легков")
 
@@ -358,7 +358,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "• BMW А 121 МР 77\n"
         "• в две строки: BMW + номер\n\n"
         "После создания — кнопки «Изменить» и «Удалить».\n"
-        f"Пропуск на «{PASS24_ADDRESS_KEYWORD}», разовый на {PASS24_PASS_HOURS} ч."
+        f"Пропуск разовый на {PASS24_PASS_HOURS} ч."
         f"{admin_help}"
     )
 

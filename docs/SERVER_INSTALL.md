@@ -59,14 +59,14 @@ systemctl enable --now docker
 ## Шаг 4. Клонировать репозиторий
 
 ```bash
-git clone git@github.com:icebeerg182/pass24-telegram-bot.git /opt/pass24-telegram-bot
+git clone git@github.com:YOUR_GITHUB_USER/pass24-telegram-bot.git /opt/pass24-telegram-bot
 cd /opt/pass24-telegram-bot
 ```
 
 HTTPS (если SSH не настроен на сервере):
 
 ```bash
-git clone https://github.com/icebeerg182/pass24-telegram-bot.git /opt/pass24-telegram-bot
+git clone https://github.com/YOUR_GITHUB_USER/pass24-telegram-bot.git /opt/pass24-telegram-bot
 ```
 
 ---
@@ -84,10 +84,10 @@ mkdir -p data
 
 ```env
 TELEGRAM_BOT_TOKEN=...
-TELEGRAM_ADMIN_USER_IDS=151373114
+TELEGRAM_ADMIN_USER_IDS=YOUR_TELEGRAM_ID
 PASS24_PHONE=+79...
 PASS24_PASSWORD=...
-PASS24_ADDRESS_KEYWORD=Ренессанс
+PASS24_ADDRESS_KEYWORD=
 ```
 
 ---
@@ -144,7 +144,7 @@ cat ~/.ssh/id_ed25519_github.pub
 Добавьте ключ в GitHub → Settings → SSH keys, затем:
 
 ```bash
-git clone git@github.com:icebeerg182/pass24-telegram-bot.git /opt/pass24-telegram-bot
+git clone git@github.com:YOUR_GITHUB_USER/pass24-telegram-bot.git /opt/pass24-telegram-bot
 ```
 
 Или клонируйте по HTTPS (для private repo понадобится Personal Access Token).

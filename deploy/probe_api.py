@@ -15,7 +15,7 @@ import requests
 BASE = "https://mobile-api.pass24online.ru/v1/"
 phone = os.environ["PASS24_PHONE"]
 password = os.environ["PASS24_PASSWORD"]
-keyword = os.getenv("PASS24_ADDRESS_KEYWORD", "Ренессанс")
+keyword = os.getenv("PASS24_ADDRESS_KEYWORD", "")
 
 
 def post(path, body, token=None):

@@ -1,6 +1,6 @@
 # Публикация на GitHub
 
-Репозиторий: https://github.com/icebeerg182/pass24-telegram-bot  
+Репозиторий: `https://github.com/YOUR_GITHUB_USER/pass24-telegram-bot`
 Версия: **0.0.1** (файл `VERSION`)
 
 ---
@@ -8,7 +8,7 @@
 ## Обычное обновление
 
 ```powershell
-cd C:\Users\icebeerg\Projects\pass24-telegram-bot
+cd path\to\pass24-telegram-bot
 git add .
 git commit -m "описание изменений"
 git push origin main
@@ -27,7 +27,7 @@ powershell -ExecutionPolicy Bypass -File deploy\git_publish.ps1
 Выполнить **на ПК** в каталоге проекта:
 
 ```powershell
-cd C:\Users\icebeerg\Projects\pass24-telegram-bot
+cd path\to\pass24-telegram-bot
 
 # новая ветка без истории
 git checkout --orphan fresh-main

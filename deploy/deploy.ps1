@@ -11,7 +11,22 @@ if (-not (Test-Path $envFile)) {
     Write-Error "Create .env from .env.example first"
 }
 
-$Server = "root@178.17.52.193"
+function Get-DotEnvValue([string]$name) {
+    foreach ($line in Get-Content $envFile -Encoding UTF8) {
+        if ($line -match "^\s*#") { continue }
+        if ($line -match "^\s*$name\s*=\s*(.*)\s*$") { return $Matches[1].Trim() }
+    }
+    return ""
+}
+
+$sshHost = Get-DotEnvValue "DEPLOY_SSH_HOST"
+$sshUser = Get-DotEnvValue "DEPLOY_SSH_USER"
+if (-not $sshUser) { $sshUser = "root" }
+if (-not $sshHost) {
+    Write-Error "Set DEPLOY_SSH_HOST in .env (see .env.example)"
+}
+
+$Server = "${sshUser}@${sshHost}"
 $Remote = "/opt/pass24-telegram-bot"
 
 Write-Host "==> mkdir on server"

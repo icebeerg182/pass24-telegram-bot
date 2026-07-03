@@ -13,7 +13,7 @@ from pass24_api_client import Pass24ApiClient
 
 phone = os.environ["PASS24_PHONE"]
 password = os.environ["PASS24_PASSWORD"]
-keyword = os.getenv("PASS24_ADDRESS_KEYWORD", "Ренессанс")
+keyword = os.getenv("PASS24_ADDRESS_KEYWORD", "")
 
 client = Pass24ApiClient(phone, password, keyword)
 client.login()

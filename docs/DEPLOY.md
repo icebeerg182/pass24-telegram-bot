@@ -12,7 +12,7 @@
 
 ```bash
 rm -rf /opt/pass24-telegram-bot
-git clone git@github.com:icebeerg182/pass24-telegram-bot.git /opt/pass24-telegram-bot
+git clone git@github.com:YOUR_GITHUB_USER/pass24-telegram-bot.git /opt/pass24-telegram-bot
 cd /opt/pass24-telegram-bot
 cp /root/pass24.env.backup .env   # ваш сохранённый .env
 mkdir -p data

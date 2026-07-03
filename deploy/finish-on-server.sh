@@ -1,5 +1,5 @@
 #!/bin/bash
-# Вставьте в открытую SSH-сессию на root@178.17.52.193 (один раз)
+# Вставьте в открытую SSH-сессию на вашем сервере (один раз)
 set -eu
 REMOTE_DIR="/opt/pass24-telegram-bot"
 SERVICE="pass24-telegram-bot.service"

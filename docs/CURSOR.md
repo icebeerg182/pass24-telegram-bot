@@ -7,7 +7,7 @@
 ### Windows / Mac
 
 ```bash
-git clone git@github.com:icebeerg182/pass24-telegram-bot.git
+git clone git@github.com:YOUR_GITHUB_USER/pass24-telegram-bot.git
 cd pass24-telegram-bot
 cp .env.example .env
 # заполнить .env
@@ -36,7 +36,7 @@ git pull
 SSH clone (рекомендуется):
 
 ```bash
-git clone git@github.com:icebeerg182/pass24-telegram-bot.git
+git clone git@github.com:YOUR_GITHUB_USER/pass24-telegram-bot.git
 ```
 
 ## Collaborator (если нужен другому человеку)

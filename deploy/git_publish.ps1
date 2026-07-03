@@ -17,8 +17,7 @@ git commit -m "Update v$version"
 git push origin main
 
 if ($LASTEXITCODE -ne 0) {
-    git remote set-url origin git@github.com:icebeerg182/pass24-telegram-bot.git
-    git push origin main
+    Write-Error "git push failed. Configure origin: git remote set-url origin git@github.com:YOUR_USER/pass24-telegram-bot.git"
 }
 
 Write-Host "Done"
