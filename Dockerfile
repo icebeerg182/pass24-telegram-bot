@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY pass24_api_client/ pass24_api_client/
 COPY bot/ bot/
+COPY VERSION VERSION
 COPY deploy/smoke_test.py deploy/smoke_test.py
 
 RUN mkdir -p /app/data && chown -R appuser:appuser /app
