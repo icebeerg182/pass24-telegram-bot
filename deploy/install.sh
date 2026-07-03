@@ -72,14 +72,26 @@ ensure_docker() {
 ensure_python_tools() {
   if ! command -v python3 >/dev/null 2>&1; then
     info "Устанавливаю python3..."
-    apt-get install -y -qq python3 python3-pip python3-venv
+    apt-get install -y -qq python3 python3-pip
   fi
 
-  if ! python3 -c "import requests" 2>/dev/null; then
+  local missing=0
+  python3 -c "import requests" 2>/dev/null || missing=1
+  python3 -c "import dotenv" 2>/dev/null || missing=1
+  python3 -c "import pytz" 2>/dev/null || missing=1
+
+  if [ "$missing" -eq 1 ]; then
     info "Устанавливаю Python-зависимости для проверки..."
+    apt-get install -y -qq python3-requests python3-pip 2>/dev/null || true
     python3 -m pip install -q --break-system-packages requests python-dotenv pytz 2>/dev/null \
-      || python3 -m pip install -q requests python-dotenv pytz
+      || python3 -m pip install -q requests python-dotenv pytz 2>/dev/null \
+      || apt-get install -y -qq python3-dotenv python3-tz
   fi
+
+  if ! python3 -c "import requests, dotenv, pytz" 2>/dev/null; then
+    fail "Не удалось установить python3-модули: requests, python-dotenv, pytz"
+  fi
+  ok "Python-зависимости для проверки готовы"
 }
 
 normalize_phone() {
