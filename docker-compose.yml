@@ -1,7 +1,7 @@
 services:
   pass24-telegram-bot:
     build: .
-    image: pass24-telegram-bot:0.0.1
+    image: pass24-telegram-bot:0.0.2
     container_name: pass24-telegram-bot
     restart: unless-stopped
     env_file:
