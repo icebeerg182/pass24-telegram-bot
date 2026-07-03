@@ -493,15 +493,17 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         hints.append(f"Кнопка «{ADDRESS_BUTTON_LABEL}» — выбор адреса по умолчанию.")
 
     await update.message.reply_text(
-        "Бот заказа пропусков PASS24.\n\n"
-        f"Адрес: {addr}\n\n"
-        + "\n".join(hints)
-        + "\n\nПримеры:\n"
-        "<code>мерс А121МР777</code>\n"
-        "<code>А121МР77 BMW</code>\n"
-        "<code>BMW А 121 МР 77</code>\n\n"
-        "/help — справка\n"
-        "/myid — ваш Telegram ID",
+        (
+            "Бот заказа пропусков PASS24.\n\n"
+            f"Адрес: {addr}\n\n"
+            + "\n".join(hints)
+            + "\n\nПримеры:\n"
+            "<code>мерс А121МР777</code>\n"
+            "<code>А121МР77 BMW</code>\n"
+            "<code>BMW А 121 МР 77</code>\n\n"
+            "/help — справка\n"
+            "/myid — ваш Telegram ID"
+        ),
         parse_mode="HTML",
         reply_markup=markup,
     )
@@ -520,32 +522,26 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f"/open <{hours_list}> — открыть бот для всех на N часов\n"
             "/close — закрыть временный доступ"
         )
-    await update.message.reply_text(
-        "Форматы сообщения (марка и номер в любом порядке):\n"
-        "• мерс А121МР777\n"
-        "• А121МР77 BMW\n"
-        "• BMW А121МР77 серый\n"
-        "• BMW А 121 МР 77\n"
-        "• в две строки: BMW + номер\n\n"
-        "После создания — кнопки «Изменить» и «Удалить».\n"
-        f"Пропуск разовый на {PASS24_PASS_HOURS} ч.\n"
-        + (
-            f"Кнопка «{ADDRESS_BUTTON_LABEL}» — сменить адрес по умолчанию.\n"
-            if BOT_ENABLE_ADDRESS_PICKER
-            else ""
-        )
-        + (
-            "Перед заказом бот спросит тип ТС (легковой/грузовой).\n"
-            if BOT_ASK_VEHICLE_TYPE
-            else ""
-        )
-        + (
-            "Перед созданием пропуска бот запросит подтверждение.\n"
-            if BOT_CONFIRM_BEFORE_CREATE
-            else "Пропуск создаётся сразу после распознавания марки и номера.\n"
-        )
-        f"{admin_help}"
-    )
+    parts = [
+        "Форматы сообщения (марка и номер в любом порядке):\n",
+        "• мерс А121МР777\n",
+        "• А121МР77 BMW\n",
+        "• BMW А121МР77 серый\n",
+        "• BMW А 121 МР 77\n",
+        "• в две строки: BMW + номер\n\n",
+        "После создания — кнопки «Изменить» и «Удалить».\n",
+        f"Пропуск разовый на {PASS24_PASS_HOURS} ч.\n",
+    ]
+    if BOT_ENABLE_ADDRESS_PICKER:
+        parts.append(f"Кнопка «{ADDRESS_BUTTON_LABEL}» — сменить адрес по умолчанию.\n")
+    if BOT_ASK_VEHICLE_TYPE:
+        parts.append("Перед заказом бот спросит тип ТС (легковой/грузовой).\n")
+    if BOT_CONFIRM_BEFORE_CREATE:
+        parts.append("Перед созданием пропуска бот запросит подтверждение.\n")
+    else:
+        parts.append("Пропуск создаётся сразу после распознавания марки и номера.\n")
+
+    await update.message.reply_text("".join(parts) + admin_help)
 
 
 async def _send_pass_created(
