@@ -10,3 +10,5 @@
 - Управление доступом: `/allow`, `/deny`, временное открытие `/open 12|24|48`, `/close`
 - Кнопки «Изменить» и «Удалить» под созданным пропуском
 - Docker-образ и `docker-compose.yml`
+- Интерактивный установщик `deploy/install.sh` с проверкой кредов
+- `deploy/validate_env.py` — проверка `.env` (Telegram + PASS24)
