@@ -1,90 +1,70 @@
 # Публикация на GitHub
 
-Репозиторий: https://github.com/icebeerg182/pass24-telegram-bot (private)
-
-Текущая версия: **0.0.1** (`VERSION`)
-
----
-
-## Первый раз (уже сделано)
-
-```bash
-git clone git@github.com:icebeerg182/pass24-telegram-bot.git
-```
+Репозиторий: https://github.com/icebeerg182/pass24-telegram-bot  
+Версия: **0.0.1** (файл `VERSION`)
 
 ---
 
-## Обычное обновление (Windows)
+## Обычное обновление
 
 ```powershell
 cd C:\Users\icebeerg\Projects\pass24-telegram-bot
-
-git status
 git add .
-git status
-
-# .env не должен попасть в коммит (в .gitignore)
-git commit -m "Release 0.0.1: Docker deployment"
-
+git commit -m "описание изменений"
 git push origin main
 ```
 
-Или скрипт:
+Или:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy\git_publish.ps1
 ```
 
-Если push по HTTPS не работает:
-
-```powershell
-git remote set-url origin git@github.com:icebeerg182/pass24-telegram-bot.git
-git push origin main
-```
-
 ---
 
-## Тег версии (рекомендуется для релизов)
+## Чистая история (один коммит, только Docker-версия)
+
+Выполнить **на ПК** в каталоге проекта:
 
 ```powershell
 cd C:\Users\icebeerg\Projects\pass24-telegram-bot
 
-git tag -a v0.0.1 -m "Version 0.0.1"
-git push origin v0.0.1
+# новая ветка без истории
+git checkout --orphan fresh-main
+git add -A
+git restore --staged .env 2>$null
+
+git commit -m "PASS24 Telegram Bot v0.0.1 (Docker)"
+
+git branch -D main
+git branch -m main
+
+git tag -f v0.0.1
+
+# заменить историю на GitHub
+git push -f origin main
+git push -f origin v0.0.1
 ```
+
+После этого на GitHub останется **один коммит** с текущим кодом.
+
+> ⚠️ `git push -f` перезаписывает историю. Для private-репозитория это безопасно, если работаете один.
 
 ---
 
-## Следующие версии
-
-1. Изменить число в файле `VERSION` (например `0.0.2`)
-2. Добавить запись в `CHANGELOG.md`
-3. Обновить тег образа в `docker-compose.yml` (строка `image:`)
-4. Коммит + push + тег `v0.0.2`
+## Теги версий
 
 ```powershell
-git add VERSION CHANGELOG.md docker-compose.yml
-git commit -m "Release 0.0.2"
 git tag -a v0.0.2 -m "Version 0.0.2"
-git push origin main
 git push origin v0.0.2
 ```
 
+Не забудьте обновить `VERSION` и `CHANGELOG.md`.
+
 ---
 
-## Что не коммитить
+## Не коммитить
 
-- `.env` — токены и пароли
-- `data/allowed_users.json` — список пользователей с сервера
+- `.env`
+- `data/allowed_users.json`
 - `.venv/`
-
----
-
-## Проверка после push
-
-Откройте https://github.com/icebeerg182/pass24-telegram-bot — должны быть:
-
-- `Dockerfile`, `docker-compose.yml`
-- `VERSION` = `0.0.1`
-- `CHANGELOG.md`
-- `docs/MIGRATE_TO_DOCKER.md`

@@ -1,8 +1,6 @@
 # Docker-деплой
 
-Рекомендуемый способ запуска на сервере — **Docker Compose**.
-
-Миграция со старого systemd: [MIGRATE_TO_DOCKER.md](MIGRATE_TO_DOCKER.md)
+Версия **0.0.1**. Установка с нуля: [SERVER_INSTALL.md](SERVER_INSTALL.md)
 
 ## Требования
 
@@ -40,5 +38,4 @@ bash deploy/docker-up.sh
 
 ## Legacy: systemd
 
-Старый способ через `pass24-telegram-bot.service` описан в [DEPLOY.md](DEPLOY.md).  
-Для новых установок используйте Docker.
+Файлы `deploy/install.sh` и `pass24-telegram-bot.service` оставлены в репозитории, но **не используются**. Запуск только через Docker.
