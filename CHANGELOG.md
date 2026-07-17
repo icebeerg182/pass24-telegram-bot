@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.3] — 2026-07-17
+
+### Добавлено
+
+- Расширенный словарь сокращений марок (~80 брендов): Peugeot, Citroen, Opel, Fiat, Alfa Romeo, Seat, Cupra, Suzuki, Infiniti, Genesis, китайские бренды (Voyah, Aito, Nio, XPeng, Belgee и др.), американские (Dodge, Cadillac, Hummer) и др.
+
 ## [0.0.2] — 2026-07-03
 
 ### Добавлено
