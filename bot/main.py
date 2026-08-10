@@ -29,6 +29,7 @@ from telegram.ext import (
 from bot import __version__
 from bot.access import AccessControl, PUBLIC_HOURS
 from bot.parser import ParseError, parse_message
+from bot.yandex_delivery import try_parse_yandex_or_raise
 from pass24_api_client import Pass24ApiClient
 from pass24_api_client.api_client import AddressError, AuthError, RequestError
 
@@ -485,6 +486,9 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     markup = _reply_keyboard_for_user(uid)
 
     hints = ["Отправьте марку и госномер."]
+    hints.append(
+        "Или ссылку Яндекс Доставки: https://dostavka.yandex.ru/route/#…"
+    )
     if BOT_ASK_VEHICLE_TYPE:
         hints.append("Перед заказом бот спросит тип ТС: легковой или грузовой.")
     if BOT_CONFIRM_BEFORE_CREATE:
@@ -528,7 +532,8 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "• А121МР77 BMW\n",
         "• BMW А121МР77 серый\n",
         "• BMW А 121 МР 77\n",
-        "• в две строки: BMW + номер\n\n",
+        "• в две строки: BMW + номер\n",
+        "• ссылка Яндекс Доставки (когда курьер уже назначен)\n\n",
         "После создания — кнопки «Изменить» и «Удалить».\n",
         f"Пропуск разовый на {PASS24_PASS_HOURS} ч.\n",
     ]
@@ -791,7 +796,11 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         models = client.get_vehicle_models()
-        parsed = parse_message(text, models)
+        yandex_parsed = try_parse_yandex_or_raise(text, models)
+        if yandex_parsed is not None:
+            parsed = yandex_parsed
+        else:
+            parsed = parse_message(text, models)
     except ParseError as e:
         await update.message.reply_text(str(e))
         return
