@@ -92,7 +92,7 @@ def _is_ignored_token(token: str) -> bool:
 
 
 def _expand_token_candidates(token: str) -> list[str]:
-    """Mercedes-Maybach → Maybach, Mercedes-Maybach, Mercedes (специфичное раньше)."""
+    """Mercedes-Maybach → Mercedes-Maybach, Mercedes, Maybach (сначала целое и левая часть)."""
     token = token.strip(".,;:·•")
     if not token:
         return []
@@ -110,9 +110,7 @@ def _expand_token_candidates(token: str) -> list[str]:
         out.append(v)
 
     parts = [p for p in re.split(r"[-_/]+", token) if p]
-    # Справа налево: Maybach важнее Mercedes в Mercedes-Maybach
-    for part in reversed(parts):
-        add(part)
+    # Сначала целое (алиас mercedes-maybach → Mercedes), затем слева направо
     add(token)
     for part in parts:
         add(part)
