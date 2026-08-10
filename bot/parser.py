@@ -30,7 +30,20 @@ IGNORE_TOKENS = {
     "оранжевый", "orange",
     "фиолетовый", "purple",
     "голубой", "lightblue",
+    # мусор из Wheely / детальных названий
+    "класс", "class", "klasse", "серии", "series", "serie",
+    "купе", "coupe", "седан", "sedan", "универсал",
+    "кабриолет", "cabriolet", "внедорожник", "кроссовер",
 }
+
+# S-Класс, E-Class, GLE-Класс, S Class…
+_CLASS_TOKEN_RE = re.compile(
+    r"(?i)^(?:[a-zа-я]{1,4}-?)?(?:класс|class|klasse)$"
+)
+# Коды кузова/поколений: Z223, W223, V223, X167…
+_CHASSIS_CODE_RE = re.compile(r"(?i)^[a-z]\d{2,3}[a-z]?$")
+# Короткие модельные индексы без марки: 223, 350d — не марка
+_BARE_MODEL_NUM_RE = re.compile(r"(?i)^\d{2,4}[a-z]?$")
 
 
 @dataclass
@@ -58,11 +71,52 @@ def normalize_plate(raw: str) -> str:
 def _normalize_text(text: str) -> str:
     text = (text or "").strip()
     text = text.replace("\n", " ").replace("\r", " ")
+    # Wheely часто шлёт «модель, номер»
+    text = text.replace(",", " ")
     return re.sub(r"\s+", " ", text).strip()
 
 
 def _is_ignored_token(token: str) -> bool:
-    return token.lower().strip(".,;:") in IGNORE_TOKENS
+    t = token.lower().strip(".,;:·•")
+    if not t:
+        return True
+    if t in IGNORE_TOKENS:
+        return True
+    if _CLASS_TOKEN_RE.fullmatch(t):
+        return True
+    if _CHASSIS_CODE_RE.fullmatch(t):
+        return True
+    if _BARE_MODEL_NUM_RE.fullmatch(t):
+        return True
+    return False
+
+
+def _expand_token_candidates(token: str) -> list[str]:
+    """Mercedes-Maybach → Maybach, Mercedes-Maybach, Mercedes (специфичное раньше)."""
+    token = token.strip(".,;:·•")
+    if not token:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def add(value: str) -> None:
+        v = value.strip("-_. ")
+        if not v or _is_ignored_token(v):
+            return
+        key = v.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(v)
+
+    parts = [p for p in re.split(r"[-_/]+", token) if p]
+    # Справа налево: Maybach важнее Mercedes в Mercedes-Maybach
+    for part in reversed(parts):
+        add(part)
+    add(token)
+    for part in parts:
+        add(part)
+    return out
 
 
 def _extract_brand_tokens(text: str, plate_match: re.Match) -> list[str]:
@@ -74,7 +128,7 @@ def _extract_brand_tokens(text: str, plate_match: re.Match) -> list[str]:
         if not part:
             continue
         for raw in re.split(r"[\s,]+", part):
-            token = raw.strip(".,;:")
+            token = raw.strip(".,;:·•")
             if not token or _is_ignored_token(token):
                 continue
             compact = re.sub(r"\s+", "", token)
@@ -83,6 +137,50 @@ def _extract_brand_tokens(text: str, plate_match: re.Match) -> list[str]:
             tokens.append(token)
 
     return tokens
+
+
+def _candidate_brand_strings(tokens: list[str]) -> list[str]:
+    """Плоский список кандидатов марки из токенов Wheely/ручного ввода."""
+    candidates: list[str] = []
+    seen: set[str] = set()
+
+    def add(value: str) -> None:
+        key = value.lower()
+        if key in seen:
+            return
+        seen.add(key)
+        candidates.append(value)
+
+    # Составные пары целиком (Land Rover)
+    for i in range(len(tokens) - 1):
+        add(f"{tokens[i]} {tokens[i + 1]}")
+
+    for token in tokens:
+        for cand in _expand_token_candidates(token):
+            add(cand)
+
+    return candidates
+
+
+def resolve_brand_from_verbose_name(
+    vehicle_name: str,
+    pass24_models: dict[str, int],
+) -> tuple[str, str] | None:
+    """Разобрать длинное имя вроде «Mercedes-Maybach S-Класс Z223» → марка PASS24."""
+    text = _normalize_text(vehicle_name)
+    if not text:
+        return None
+    tokens = [
+        t for t in re.split(r"[\s,]+", text)
+        if t and not _is_ignored_token(t.strip(".,;:·•"))
+    ]
+    if not tokens:
+        return None
+    for cand in _candidate_brand_strings(tokens):
+        found = resolve_brand(cand, pass24_models)
+        if found:
+            return cand, found
+    return None
 
 
 def parse_message(text: str, pass24_models: dict[str, int]) -> ParsedPass:
@@ -110,22 +208,12 @@ def parse_message(text: str, pass24_models: dict[str, int]) -> ParsedPass:
     canonical = None
     brand_token = None
 
-    for token in tokens:
-        found = resolve_brand(token, pass24_models)
+    for cand in _candidate_brand_strings(tokens):
+        found = resolve_brand(cand, pass24_models)
         if found:
             canonical = found
-            brand_token = token
+            brand_token = cand
             break
-
-    # Составные марки: land rover, mercedes benz
-    if not canonical and len(tokens) >= 2:
-        for i in range(len(tokens) - 1):
-            pair = f"{tokens[i]} {tokens[i + 1]}"
-            found = resolve_brand(pair, pass24_models)
-            if found:
-                canonical = found
-                brand_token = pair
-                break
 
     if not canonical:
         hints = suggest_brands(tokens[0], pass24_models)

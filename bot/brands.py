@@ -15,9 +15,13 @@ BRAND_ALIASES: dict[str, str | list[str]] = {
     "мерседесбенц": ["mercedes-benz", "mercedes"],
     "mb": ["mercedes-benz", "mercedes"],
     "benz": ["mercedes-benz", "mercedes"],
-    # Maybach
+    # Maybach / Mercedes-Maybach (Wheely и др.)
     "майбах": "maybach",
     "maybach": "maybach",
+    "mercedes-maybach": "maybach",
+    "mercedesmaybach": "maybach",
+    "мерседесмайбах": "maybach",
+    "мерседес-майбах": "maybach",
     # BMW
     "бмв": "bmw",
     "bmw": "bmw",

@@ -8,7 +8,6 @@ from dataclasses import dataclass
 
 import requests
 
-from bot.brands import resolve_brand
 from bot.parser import ParseError, ParsedPass, normalize_plate
 
 log = logging.getLogger("pass24-bot.yandex")
@@ -69,22 +68,15 @@ def _resolve_brand_from_vehicle_model(
     vehicle_model: str,
     pass24_models: dict[str, int],
 ) -> tuple[str, str]:
+    from bot.parser import resolve_brand_from_verbose_name
+
     raw = (vehicle_model or "").strip()
     if not raw:
         raise YandexDeliveryError("В трекинге нет модели автомобиля")
 
-    # Hyundai Creta → сначала полное, потом первое слово
-    candidates = [raw]
-    parts = raw.split()
-    if parts:
-        candidates.append(parts[0])
-    if len(parts) >= 2:
-        candidates.append(f"{parts[0]} {parts[1]}")
-
-    for token in candidates:
-        found = resolve_brand(token, pass24_models)
-        if found:
-            return token, found
+    resolved = resolve_brand_from_verbose_name(raw, pass24_models)
+    if resolved:
+        return resolved
 
     raise YandexDeliveryError(
         f"Марка «{raw}» не найдена в справочнике PASS24. "
