@@ -1,6 +1,6 @@
 # Docker-деплой
 
-Версия **0.0.3**. Установка с нуля: [SERVER_INSTALL.md](SERVER_INSTALL.md)
+Версия **0.0.4**. Установка с нуля: [SERVER_INSTALL.md](SERVER_INSTALL.md)
 
 ## Требования
 
