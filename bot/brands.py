@@ -226,6 +226,13 @@ BRAND_ALIASES: dict[str, str | list[str]] = {
     # Tesla
     "тесла": "tesla",
     "tesla": "tesla",
+    # Sollers (Соллерс)
+    "солерс": "sollers",
+    "соллерс": "sollers",
+    "соллэрс": "sollers",
+    "солэрс": "sollers",
+    "sollers": "sollers",
+    "solers": "sollers",
     # LiXiang / Li Auto
     "li": ["lixiang", "li auto", "liauto"],
     "ли": ["lixiang", "li auto", "liauto"],
