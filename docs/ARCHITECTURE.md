@@ -4,9 +4,13 @@
 
 ```
 Пользователь Telegram
-    │  "мерс А121МР777"
+    │  "мерс А121МР777"  /  ссылка Яндекс Доставки  /  текст Wheely
     ▼
 bot/parser.py + bot/brands.py
+    │  номер (regex) + марка (алиасы / fuzzy)
+    │  если марка не найдена и BOT_LLM_BRAND_RESOLVER=true
+    ▼
+bot/llm_brand.py  (Groq)  → сверка со справочником PASS24
     │  Mercedes-Benz, А121МР777
     ▼
 pass24_api_client.Pass24ApiClient
@@ -26,13 +30,19 @@ mobile-api.pass24online.ru/v1/passes
 
 При нескольких адресах в аккаунте выбирается первый, в `name` которого есть подстрока `PASS24_ADDRESS_KEYWORD` (регистронезависимо).
 
-## Словарь марок
+Опционально: кнопка «📍 Адрес» (`BOT_ENABLE_ADDRESS_PICKER`).
 
-`bot/brands.py` — статические алиасы (`мерс` → `Mercedes-Benz`).
+## Словарь марок и LLM
 
-Затем имя сопоставляется со справочником `GET /v1/vehicle-models` (точные имена PASS24).
+`bot/brands.py` — статические алиасы (`мерс` → `Mercedes-Benz`, `маруся` → `Marussia`).
 
-При необходимости дополняйте `BRAND_ALIASES`.
+Имя сопоставляется со справочником `GET /v1/vehicle-models`.
+
+Если не найдено и включён `BOT_LLM_BRAND_RESOLVER`, вызывается Groq (`bot/llm_brand.py`): модель выбирает марку **только из каталога**, ответ кэшируется в `data/brands_learned.json`.
+
+## Яндекс Доставка
+
+Ссылка `https://dostavka.yandex.ru/route/#<uuid>` → публичный `shared-route/info` → `vehicle_model` / `vehicle_number`.
 
 ## Отличие от alpha.pass24.online
 

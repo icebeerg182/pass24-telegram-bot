@@ -2,7 +2,7 @@
 
 Telegram-бот для заказа **автомобильных пропусков** через mobile API жителя [PASS24.online](https://pass24online.ru/).
 
-**Версия:** 0.0.5-pre
+**Версия:** 0.0.5 · **Репозиторий:** [github.com/icebeerg182/pass24-telegram-bot](https://github.com/icebeerg182/pass24-telegram-bot)
 
 ## Для кого
 
@@ -10,13 +10,14 @@ Telegram-бот для заказа **автомобильных пропуск�
 
 ## Возможности
 
-- Пропуск одним сообщением: `BMW А121МР77`, `мерс А121МР777`, марка и номер в двух строках
+- Пропуск одним сообщением: `BMW А121МР77`, `мерс А121МР777`, `маруся А123ВС77`, марка и номер в двух строках
+- Словарь сокращений марок + fallback через **Groq LLM**, если парсер не распознал бренд
 - Ссылка Яндекс Доставки (`dostavka.yandex.ru/route/#…`) — автоподстановка марки и номера курьера
-- Кнопки **Изменить** и **Удалить** под созданным пропуском
+- Нормализация длинных названий (Wheely и т.п.): `Mercedes-Maybach S-Класс Z223, У 061 ЕН 550`
+- Кнопки **Изменить** / **Удалить** под созданным пропуском
 - Управление доступом: белый список, временное открытие на 12/24/48 часов
-- Выбор адреса, если в аккаунте несколько объектов (`PASS24_ADDRESS_KEYWORD` или кнопка «📍 Адрес`)
-- Настраиваемый выбор типа ТС: легковой / грузовой
-- Настраиваемое подтверждение перед созданием пропуска
+- Выбор адреса (`PASS24_ADDRESS_KEYWORD` или кнопка «📍 Адрес»)
+- Опционально: тип ТС (легковой/грузовой) и подтверждение перед созданием
 
 ## Быстрый старт на сервере
 
@@ -29,7 +30,7 @@ bash deploy/install.sh
 ```
 
 Скрипт интерактивно запросит креды, проверит Telegram и PASS24 и запустит контейнер.  
-Входящие порты на сервере не нужны — бот использует long polling.
+Входящие порты не нужны — long polling.
 
 Подробнее: [docs/SERVER_INSTALL.md](docs/SERVER_INSTALL.md)
 
@@ -40,7 +41,7 @@ git clone https://github.com/icebeerg182/pass24-telegram-bot.git
 cd pass24-telegram-bot
 cp .env.example .env
 # заполнить .env
-python3 deploy/validate_env.py   # проверка кредов
+python3 deploy/validate_env.py
 mkdir -p data
 docker compose up -d --build
 docker compose logs -f
@@ -51,13 +52,14 @@ docker compose logs -f
 | Команда | Кто | Описание |
 |---|---|---|
 | `BMW А121МР77` | все | Создать пропуск |
+| ссылка `dostavka.yandex.ru/route/#…` | все | Взять марку/номер из трекинга |
 | `/start`, `/help` | все | Справка |
 | `/myid` | все | Узнать свой Telegram ID |
-| `/allow <id>` | админ | Постоянный доступ пользователю |
+| `/allow <id>` | админ | Постоянный доступ |
 | `/deny <id>` | админ | Забрать доступ |
 | `/open 12\|24\|48` | админ | Открыть бот для всех на N часов |
 | `/close` | админ | Закрыть временный доступ |
-| `/users` | админ | Список пользователей с доступом |
+| `/users` | админ | Список доступа |
 
 ## Переменные окружения
 
@@ -66,7 +68,7 @@ docker compose logs -f
 | Переменная | Описание |
 |---|---|
 | `TELEGRAM_BOT_TOKEN` | Токен от @BotFather |
-| `TELEGRAM_ADMIN_USER_IDS` | Telegram ID админов (через запятую) |
+| `TELEGRAM_ADMIN_USER_IDS` | Telegram ID админов |
 | `PASS24_PHONE` | Телефон аккаунта PASS24 |
 | `PASS24_PASSWORD` | Пароль PASS24 |
 
@@ -76,9 +78,20 @@ docker compose logs -f
 
 | Переменная | По умолчанию | Описание |
 |---|---|---|
-| `BOT_ASK_VEHICLE_TYPE` | `false` | Спрашивать легковой/грузовой при заказе |
-| `BOT_CONFIRM_BEFORE_CREATE` | `true` | Подтверждение перед созданием пропуска |
-| `BOT_ENABLE_ADDRESS_PICKER` | `false` | Кнопка «📍 Адрес» для выбора адреса |
+| `BOT_ASK_VEHICLE_TYPE` | `false` | Спрашивать легковой/грузовой |
+| `BOT_CONFIRM_BEFORE_CREATE` | `true` | Подтверждение перед созданием |
+| `BOT_ENABLE_ADDRESS_PICKER` | `false` | Кнопка «📍 Адрес» |
+
+LLM fallback (опционально, [Groq](https://console.groq.com/)):
+
+| Переменная | По умолчанию | Описание |
+|---|---|---|
+| `BOT_LLM_BRAND_RESOLVER` | `false` | Включить LLM, если парсер не нашёл марку |
+| `BOT_LLM_PROVIDER` | `groq` | Провайдер |
+| `BOT_LLM_API_KEY` | пусто | API-ключ Groq |
+| `BOT_LLM_MODEL` | `llama-3.3-70b-versatile` | Модель |
+
+Удачные ответы LLM пишутся в `data/brands_learned.json` (не коммитить).
 
 ## Документация
 
@@ -93,7 +106,7 @@ docker compose logs -f
 
 ```
 pass24_api_client/   # клиент PASS24 mobile API
-bot/                 # Telegram-бот (парсер, доступ, handlers)
+bot/                 # Telegram-бот (парсер, LLM fallback, handlers)
 deploy/              # install.sh, validate_env.py, smoke_test.py
 Dockerfile
 docker-compose.yml
@@ -102,13 +115,15 @@ docs/
 
 ## Безопасность
 
-- Не коммитьте `.env` и `data/allowed_users.json`
-- Храните токен бота и пароль PASS24 только на сервере
-- После первого запуска добавьте себя админом через `TELEGRAM_ADMIN_USER_IDS` в `.env`
+- Не коммитьте `.env`, `data/allowed_users.json`, `data/brands_learned.json`
+- Храните токен бота, пароль PASS24 и `BOT_LLM_API_KEY` только на сервере
+- После первого запуска задайте себя в `TELEGRAM_ADMIN_USER_IDS`
 
 ## Основа проекта
 
 Клиент `pass24_api_client/` основан на [dmtrbrlkv/pass24](https://github.com/dmtrbrlkv/pass24) — Python-клиент mobile API `mobile-api.pass24online.ru`.
+
+Этот репозиторий — отдельный проект (Telegram-бот, Docker, парсер, LLM fallback), а не форк на GitHub.
 
 ## Лицензия
 
