@@ -7,3 +7,4 @@ __pycache__/
 .Python
 *.log
 data/allowed_users.json
+data/brands_learned.json

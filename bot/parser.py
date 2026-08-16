@@ -178,6 +178,12 @@ def resolve_brand_from_verbose_name(
         found = resolve_brand(cand, pass24_models)
         if found:
             return cand, found
+
+    from bot.llm_brand import resolve_brand_via_llm
+
+    llm_brand = resolve_brand_via_llm(text, pass24_models)
+    if llm_brand:
+        return text, llm_brand
     return None
 
 
@@ -212,6 +218,16 @@ def parse_message(text: str, pass24_models: dict[str, int]) -> ParsedPass:
             canonical = found
             brand_token = cand
             break
+
+    if not canonical:
+        from bot.llm_brand import resolve_brand_via_llm
+
+        # В LLM отдаём исходный фрагмент с маркой (без опоры только на токены)
+        brand_side = (text[: match.start()] + " " + text[match.end() :]).strip()
+        llm_brand = resolve_brand_via_llm(brand_side or text, pass24_models)
+        if llm_brand:
+            canonical = llm_brand
+            brand_token = brand_side or tokens[0]
 
     if not canonical:
         hints = suggest_brands(tokens[0], pass24_models)

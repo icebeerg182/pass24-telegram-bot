@@ -28,6 +28,7 @@ from telegram.ext import (
 
 from bot import __version__
 from bot.access import AccessControl, PUBLIC_HOURS
+from bot.llm_brand import llm_enabled
 from bot.parser import ParseError, parse_message
 from bot.yandex_delivery import try_parse_yandex_or_raise
 from pass24_api_client import Pass24ApiClient
@@ -1002,12 +1003,13 @@ def main() -> None:
     else:
         mode = f"restricted ({len(ACCESS.all_allowed())} users)"
     log.info(
-        "Starting bot v%s (address: %s, ask_vtype=%s, confirm=%s, addr_picker=%s, access: %s)",
+        "Starting bot v%s (address: %s, ask_vtype=%s, confirm=%s, addr_picker=%s, llm_brand=%s, access: %s)",
         __version__,
         PASS24_ADDRESS_KEYWORD,
         BOT_ASK_VEHICLE_TYPE,
         BOT_CONFIRM_BEFORE_CREATE,
         BOT_ENABLE_ADDRESS_PICKER,
+        llm_enabled(),
         mode,
     )
     app.run_polling(allowed_updates=Update.ALL_TYPES)
