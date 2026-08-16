@@ -227,6 +227,13 @@ BRAND_ALIASES: dict[str, str | list[str]] = {
     # Geely
     "джили": "geely",
     "geely": "geely",
+    # Marussia
+    "маруся": "marussia",
+    "маруссия": "marussia",
+    "маруссия": "marussia",
+    "marussia": "marussia",
+    "marusia": "marussia",
+    "marussia": "marussia",
     # Tesla
     "тесла": "tesla",
     "tesla": "tesla",
