@@ -14,7 +14,7 @@ import requests
 log = logging.getLogger("pass24-bot.llm")
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-DEFAULT_MODEL = "llama-3.1-8b-instant"
+DEFAULT_MODEL = "llama-3.3-70b-versatile"
 CACHE_PATH = Path(__file__).resolve().parent.parent / "data" / "brands_learned.json"
 
 _lock = threading.Lock()
@@ -84,17 +84,27 @@ def _call_groq(user_text: str, catalog_names: list[str], timeout: float = 8.0) -
 
     system = (
         "You map messy vehicle brand mentions to an official catalog name.\n"
+        "Return ONLY valid JSON with exactly these keys: brand, confidence.\n"
+        'Format: {"brand":"<exact catalog name>","confidence":"high"} '
+        'OR {"brand":null,"confidence":"low"}\n'
         "Rules:\n"
-        "1) Reply with JSON only: {\"brand\": \"<exact catalog name>\"} or {\"brand\": null}\n"
-        "2) brand MUST be copied EXACTLY from the catalog list (same spelling/case), or null\n"
-        "3) Prefer the manufacturer brand, not the model (Hyundai Creta -> Hyundai)\n"
-        "4) Mercedes-Maybach -> Mercedes-Benz; use Maybach only if the text is specifically Maybach alone\n"
-        "5) Ignore colors, body class (S-Class), chassis codes (Z223), plate numbers\n"
-        "6) If unsure, return null"
+        "- brand MUST be copied EXACTLY from the catalog list, or null\n"
+        "- Prefer manufacturer brand, not model (Hyundai Creta -> Hyundai)\n"
+        "- Mercedes-Maybach -> Mercedes-Benz; Maybach only if text is specifically Maybach\n"
+        "- Russian slang: бэха/бмв/бумер -> BMW, мерс/мерин -> Mercedes-Benz, "
+        "соллерс/солерс -> Sollers, фольц/фолькс -> Volkswagen\n"
+        "- Ignore colors, class names (S-Class/S-Класс), chassis codes (Z223), plates\n"
+        "- confidence=high only when clearly sure; otherwise brand=null and confidence=low\n"
+        "- NEVER invent a guess for unrelated gibberish\n"
+        "Examples:\n"
+        'Input «бэха а123мр77» -> {"brand":"BMW","confidence":"high"}\n'
+        'Input «мерс с-класс z223» -> {"brand":"Mercedes-Benz","confidence":"high"}\n'
+        'Input «xyz quantumcar» -> {"brand":null,"confidence":"low"}'
     )
     user = (
         f"User text:\n{user_text}\n\n"
-        f"Catalog brands (one per line):\n{catalog_blob}"
+        f"Catalog brands (one per line):\n{catalog_blob}\n\n"
+        'Respond with JSON: {"brand": ..., "confidence": ...}'
     )
 
     resp = requests.post(
@@ -137,9 +147,33 @@ def _call_groq(user_text: str, catalog_names: list[str], timeout: float = 8.0) -
         except json.JSONDecodeError:
             return None
 
-    brand = data.get("brand")
-    if brand is None or brand == "" or str(brand).lower() in ("null", "none"):
+    if not isinstance(data, dict):
         return None
+
+    brand = data.get("brand")
+    confidence = str(data.get("confidence") or "").strip().lower()
+    if confidence and confidence not in ("high", "medium", "ok", "sure"):
+        # low / unknown → отказ, даже если brand заполнен
+        if confidence in ("low", "no", "none", "unsure", "unknown"):
+            return None
+
+    if brand is None or brand == "" or str(brand).lower() in ("null", "none"):
+        # на случай кривого ключа — ищем значение из каталога только при high
+        if confidence in ("high", "medium", "ok", "sure", ""):
+            for value in data.values():
+                if isinstance(value, str) and value.strip() and value.strip().lower() not in (
+                    "null",
+                    "none",
+                    "high",
+                    "low",
+                    "medium",
+                ):
+                    brand = value.strip()
+                    break
+            else:
+                return None
+        else:
+            return None
     return str(brand).strip()
 
 

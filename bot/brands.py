@@ -25,6 +25,10 @@ BRAND_ALIASES: dict[str, str | list[str]] = {
     # BMW
     "бмв": "bmw",
     "bmw": "bmw",
+    "бэха": "bmw",
+    "беха": "bmw",
+    "бэху": "bmw",
+    "beha": "bmw",
     # Audi
     "ауди": "audi",
     "audi": "audi",
