@@ -208,8 +208,25 @@ def resolve_brand_from_verbose_name(
     return None
 
 
+# «bmw 4 5 8» / «1 2 1» от Алисы → «458» / «121» (цифры по одной через пробел)
+_SPACED_SINGLE_DIGITS_RE = re.compile(
+    r"(?<![0-9])(\d(?:\s+\d)+)(?![0-9])"
+)
+
+
+def glue_spaced_single_digits(text: str) -> str:
+    """Склеить последовательность одиночных цифр, разделённых пробелами."""
+    while True:
+        match = _SPACED_SINGLE_DIGITS_RE.search(text)
+        if not match:
+            return text
+        glued = re.sub(r"\s+", "", match.group(1))
+        text = text[: match.start()] + glued + text[match.end() :]
+
+
 def find_digits_plate_match(text: str) -> re.Match | None:
     """Последнее отдельное число в тексте — внутренний номер (Mazda 100)."""
+    text = glue_spaced_single_digits(text)
     matches = list(PLATE_DIGITS_RE.finditer(text))
     return matches[-1] if matches else None
 

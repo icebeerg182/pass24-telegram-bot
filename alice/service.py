@@ -53,6 +53,7 @@ def extract_command_text(body: dict) -> str:
 
 def normalize_command(text: str) -> str:
     text = normalize_spoken_numbers(text.strip())
+    text = re.sub(r"^алиса\s+", "", text, flags=re.IGNORECASE)
     text = _COMMAND_PREFIX_RE.sub("", text, count=1).strip()
     return text
 
