@@ -1,6 +1,6 @@
 # Docker-деплой
 
-Версия **0.0.7**. Установка с нуля: [SERVER_INSTALL.md](SERVER_INSTALL.md)
+Версия **0.0.8**. Установка с нуля: [SERVER_INSTALL.md](SERVER_INSTALL.md)
 
 ## Требования
 
@@ -35,3 +35,7 @@ bash deploy/docker-up.sh
 | `docker compose restart` | Перезапуск |
 | `docker compose down` | Остановка |
 | `docker compose exec pass24-telegram-bot python deploy/smoke_test.py` | Проверка PASS24 API |
+| `docker compose up -d --build pass24-alice` | Только webhook Алисы (нужен HTTPS снаружи) |
+| `docker compose logs -f pass24-alice` | Логи навыка Алисы |
+
+Навык Алисы: [ALICE_SKILL.md](ALICE_SKILL.md).

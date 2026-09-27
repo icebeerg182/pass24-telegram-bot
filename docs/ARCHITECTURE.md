@@ -66,3 +66,12 @@ mobile-api.pass24online.ru/v1/passes
 Бот использует **mobile API**, как мобильное приложение жителя.
 
 Клиент `pass24_api_client/` основан на [dmtrbrlkv/pass24](https://github.com/dmtrbrlkv/pass24).
+
+## Яндекс Алиса
+
+```
+Голос на Станции → навык (Яндекс.Диалоги) → POST /alice/webhook/<token>
+    → alice/handler.py → bot/parser.py → pass24_api_client → PASS24 API
+```
+
+Отдельный контейнер `pass24-alice` (порт `ALICE_PORT`). Telegram-бот и Алиса используют один `.env` и `data/`. Подробнее: [ALICE_SKILL.md](ALICE_SKILL.md).

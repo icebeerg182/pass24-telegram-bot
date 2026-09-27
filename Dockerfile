@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY pass24_api_client/ pass24_api_client/
 COPY bot/ bot/
+COPY alice/ alice/
 COPY VERSION VERSION
 COPY deploy/smoke_test.py deploy/smoke_test.py
 COPY deploy/docker-entrypoint.sh /entrypoint.sh

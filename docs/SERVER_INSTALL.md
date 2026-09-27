@@ -1,7 +1,7 @@
 # Установка на сервер (Docker)
 
-Версия **0.0.7**. Бот работает в контейнере `pass24-telegram-bot` (long polling).  
-**Порты на сервере открывать не нужно.**
+Версия **0.0.8**. Бот работает в контейнере `pass24-telegram-bot` (long polling).  
+**Для Telegram порты открывать не нужно.** Для Яндекс Алисы — сервис `pass24-alice` и HTTPS; см. [ALICE_SKILL.md](ALICE_SKILL.md).
 
 ---
 

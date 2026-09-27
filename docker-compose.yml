@@ -1,12 +1,24 @@
 services:
   pass24-telegram-bot:
     build: .
-    image: pass24-telegram-bot:0.0.7
+    image: pass24-telegram-bot:0.0.8
     container_name: pass24-telegram-bot
     restart: unless-stopped
     env_file:
       - .env
     volumes:
       - ./data:/app/data
-    # Изолированный контейнер: не трогает другие сервисы на хосте.
-    # Порты наружу не пробрасываем — бот работает через long polling Telegram.
+    # Порты наружу не нужны — long polling Telegram.
+
+  pass24-alice:
+    build: .
+    image: pass24-telegram-bot:0.0.8
+    container_name: pass24-alice
+    restart: unless-stopped
+    command: ["python", "-m", "alice.main"]
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "${ALICE_PORT:-8080}:8080"

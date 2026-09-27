@@ -2,7 +2,7 @@
 
 Telegram-бот для заказа **автомобильных пропусков** через mobile API жителя [PASS24.online](https://pass24online.ru/).
 
-**Версия:** 0.0.7 · **Репозиторий:** [github.com/icebeerg182/pass24-telegram-bot](https://github.com/icebeerg182/pass24-telegram-bot)
+**Версия:** 0.0.8 · **Репозиторий:** [github.com/icebeerg182/pass24-telegram-bot](https://github.com/icebeerg182/pass24-telegram-bot)
 
 ## Для кого
 
@@ -18,6 +18,7 @@ Telegram-бот для заказа **автомобильных пропуск�
 - Управление доступом: белый список, временное открытие на 12/24/48 часов
 - Выбор адреса (`PASS24_ADDRESS_KEYWORD` или кнопка «📍 Адрес»)
 - Опционально: тип ТС (легковой/грузовой) и подтверждение перед созданием
+- **Яндекс Алиса:** голосовой заказ пропуска («мазда 656») через приватный навык
 
 ## Быстрый старт на сервере
 
@@ -94,6 +95,15 @@ LLM fallback (опционально, [Groq](https://console.groq.com/)):
 
 Удачные ответы LLM пишутся в `data/brands_learned.json` (не коммитить).
 
+Яндекс Алиса (опционально, см. [docs/ALICE_SKILL.md](docs/ALICE_SKILL.md)):
+
+| Переменная | По умолчанию | Описание |
+|---|---|---|
+| `ALICE_WEBHOOK_TOKEN` | — | Секрет в URL webhook (генерировать на сервере) |
+| `ALICE_PORT` | `8080` | Порт HTTP контейнера `pass24-alice` |
+| `ALICE_SKILL_INVOCATION` | `пропуск пасс24` | Активационное имя в подсказках |
+| `ALICE_ALLOWED_USER_IDS` | пусто | Белый список `user_id` Яндекса |
+
 ## Документация
 
 | Файл | Описание |
@@ -101,6 +111,7 @@ LLM fallback (опционально, [Groq](https://console.groq.com/)):
 | [docs/SERVER_INSTALL.md](docs/SERVER_INSTALL.md) | Установка на сервер |
 | [docs/DOCKER.md](docs/DOCKER.md) | Docker-команды и обновление |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Как устроен бот |
+| [docs/ALICE_SKILL.md](docs/ALICE_SKILL.md) | Навык Яндекс Алисы |
 | [CHANGELOG.md](CHANGELOG.md) | История версий |
 
 ## Структура проекта
@@ -108,6 +119,7 @@ LLM fallback (опционально, [Groq](https://console.groq.com/)):
 ```
 pass24_api_client/   # клиент PASS24 mobile API
 bot/                 # Telegram-бот (парсер, LLM fallback, handlers)
+alice/               # webhook для навыка Яндекс Алисы
 deploy/              # install.sh, validate_env.py, smoke_test.py
 Dockerfile
 docker-compose.yml
@@ -117,7 +129,7 @@ docs/
 ## Безопасность
 
 - Не коммитьте `.env`, `data/allowed_users.json`, `data/brands_learned.json`
-- Храните токен бота, пароль PASS24 и `BOT_LLM_API_KEY` только на сервере
+- Храните токен бота, пароль PASS24, `ALICE_WEBHOOK_TOKEN` и `BOT_LLM_API_KEY` только на сервере
 - После первого запуска задайте себя в `TELEGRAM_ADMIN_USER_IDS`
 
 ## Основа проекта
