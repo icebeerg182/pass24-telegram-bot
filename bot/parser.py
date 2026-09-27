@@ -23,6 +23,9 @@ PLATE_SHORT_RE = re.compile(
     rf"(?!\s*\d)"  # не съедать хвост полного номера
 )
 
+# Внутренний номер объекта: только цифры (Mazda 100 → 100)
+PLATE_DIGITS_RE = re.compile(r"(?<![A-Za-zА-Яа-яЁё0-9])(\d{1,8})(?![A-Za-zА-Яа-яЁё0-9])")
+
 # Совместимость со старым именем
 PLATE_FLEX_RE = PLATE_FULL_RE
 
@@ -144,7 +147,11 @@ def _extract_brand_tokens(text: str, plate_match: re.Match) -> list[str]:
             if not token or _is_ignored_token(token):
                 continue
             compact = re.sub(r"\s+", "", token)
-            if PLATE_FULL_RE.fullmatch(compact) or PLATE_SHORT_RE.fullmatch(compact):
+            if (
+                PLATE_FULL_RE.fullmatch(compact)
+                or PLATE_SHORT_RE.fullmatch(compact)
+                or compact.isdigit()
+            ):
                 continue
             tokens.append(token)
 
@@ -201,18 +208,27 @@ def resolve_brand_from_verbose_name(
     return None
 
 
+def find_digits_plate_match(text: str) -> re.Match | None:
+    """Последнее отдельное число в тексте — внутренний номер (Mazda 100)."""
+    matches = list(PLATE_DIGITS_RE.finditer(text))
+    return matches[-1] if matches else None
+
+
 def find_plate_match(
     text: str,
     *,
     require_full_plate: bool = True,
 ) -> re.Match | None:
-    """Найти госномер: полный или (если разрешено) без региона."""
+    """Найти номер: полный; если разрешено — короткий или только цифры."""
     match = PLATE_FULL_RE.search(text)
     if match:
         return match
-    if not require_full_plate:
-        return PLATE_SHORT_RE.search(text)
-    return None
+    if require_full_plate:
+        return None
+    match = PLATE_SHORT_RE.search(text)
+    if match:
+        return match
+    return find_digits_plate_match(text)
 
 
 def plate_format_hint(*, require_full_plate: bool = True) -> str:
@@ -222,8 +238,8 @@ def plate_format_hint(*, require_full_plate: bool = True) -> str:
             "Примеры: А121МР777, BMW А121МР77, А121МР77 BMW"
         )
     return (
-        "Формат: буква + 3 цифры + 2 буквы (регион необязателен)\n"
-        "Примеры: А121МР, BMW А121МР77, мерс А 121 МР"
+        "Формат: марка и номер (цифры или госномер)\n"
+        "Примеры: Mazda 100, BMW А121МР, мерс А121МР77"
     )
 
 
@@ -250,9 +266,14 @@ def parse_message(
     tokens = _extract_brand_tokens(text, match)
 
     if not tokens:
+        examples = (
+            "мерс А121МР777, А121МР77 BMW"
+            if require_full_plate
+            else "Mazda 100, мерс А121МР, BMW А121МР77"
+        )
         raise ParseError(
             "Укажите марку автомобиля рядом с номером.\n"
-            "Примеры: мерс А121МР777, А121МР77 BMW, BMW А121МР77 серый"
+            f"Примеры: {examples}"
         )
 
     canonical = None

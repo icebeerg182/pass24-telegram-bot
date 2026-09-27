@@ -507,9 +507,9 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
     else:
         examples = (
+            "<code>Mazda 100</code>\n"
             "<code>мерс А121МР</code>\n"
-            "<code>А121МР BMW</code>\n"
-            "<code>BMW А121МР77</code> (регион можно)"
+            "<code>BMW А121МР77</code>"
         )
 
     await update.message.reply_text(
@@ -550,11 +550,11 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         ]
     else:
         format_lines = [
-            "Форматы сообщения (марка и номер; регион необязателен):\n",
+            "Форматы сообщения (марка и номер — цифры или госномер):\n",
+            "• Mazda 100\n",
+            "• Toyota 12\n",
             "• мерс А121МР\n",
-            "• А121МР BMW\n",
-            "• BMW А121МР77 (регион можно указать)\n",
-            "• BMW А 121 МР\n",
+            "• BMW А121МР77\n",
         ]
     parts = [
         *format_lines,

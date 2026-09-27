@@ -277,8 +277,9 @@ prompt_bot_settings() {
   prompt_yes_no "Спрашивать подтверждение перед созданием пропуска?" BOT_CONFIRM_BEFORE_CREATE y
 
   echo ""
-  echo "Некоторые адреса принимают номер без региона (А121МР),"
-  echo "другие требуют полный госномер (А121МР77 / А121МР777)."
+  echo "Режим номера:"
+  echo "  да  — только полный госномер с регионом (А121МР77)"
+  echo "  нет — марка + цифры (Mazda 100) или госномер без/с регионом"
   prompt_yes_no "Требуется полный госномер с регионом для этого адреса?" BOT_REQUIRE_FULL_PLATE y
 
   if [ "${ADDRESS_COUNT:-0}" -gt 1 ]; then
@@ -354,7 +355,7 @@ print_done() {
   if [ "${BOT_REQUIRE_FULL_PLATE:-true}" = "true" ]; then
     echo "Проверка в Telegram: /start → BMW А121МР77"
   else
-    echo "Проверка в Telegram: /start → BMW А121МР"
+    echo "Проверка в Telegram: /start → Mazda 100"
   fi
 }
 
