@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.11] — 2026-09-27
+
+### Добавлено
+
+- Генератор импортируемой Siri-команды: `deploy/generate_siri_shortcut.py`
+- Шаблон `shortcuts/Pass-Cambridge.template.shortcut` для импорта в «Команды»
+
 ## [0.0.10] — 2026-09-27
 
 ### Добавлено

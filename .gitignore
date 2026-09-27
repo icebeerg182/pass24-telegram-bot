@@ -8,3 +8,4 @@ __pycache__/
 *.log
 data/allowed_users.json
 data/brands_learned.json
+shortcuts/Pass-Cambridge.shortcut
