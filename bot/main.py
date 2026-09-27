@@ -59,6 +59,8 @@ def _env_bool(name: str, default: bool = False) -> bool:
 BOT_ASK_VEHICLE_TYPE = _env_bool("BOT_ASK_VEHICLE_TYPE")
 BOT_CONFIRM_BEFORE_CREATE = _env_bool("BOT_CONFIRM_BEFORE_CREATE")
 BOT_ENABLE_ADDRESS_PICKER = _env_bool("BOT_ENABLE_ADDRESS_PICKER")
+# true = нужен регион (А121МР77); false = достаточно А121МР
+BOT_REQUIRE_FULL_PLATE = _env_bool("BOT_REQUIRE_FULL_PLATE", default=True)
 ADDRESS_BUTTON_LABEL = "📍 Адрес"
 
 ACCESS = AccessControl(
@@ -497,15 +499,26 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if BOT_ENABLE_ADDRESS_PICKER:
         hints.append(f"Кнопка «{ADDRESS_BUTTON_LABEL}» — выбор адреса по умолчанию.")
 
+    if BOT_REQUIRE_FULL_PLATE:
+        examples = (
+            "<code>мерс А121МР777</code>\n"
+            "<code>А121МР77 BMW</code>\n"
+            "<code>BMW А 121 МР 77</code>"
+        )
+    else:
+        examples = (
+            "<code>мерс А121МР</code>\n"
+            "<code>А121МР BMW</code>\n"
+            "<code>BMW А121МР77</code> (регион можно)"
+        )
+
     await update.message.reply_text(
         (
             "Бот заказа пропусков PASS24.\n\n"
             f"Адрес: {addr}\n\n"
             + "\n".join(hints)
             + "\n\nПримеры:\n"
-            "<code>мерс А121МР777</code>\n"
-            "<code>А121МР77 BMW</code>\n"
-            "<code>BMW А 121 МР 77</code>\n\n"
+            f"{examples}\n\n"
             "/help — справка\n"
             "/myid — ваш Telegram ID"
         ),
@@ -527,12 +540,24 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f"/open <{hours_list}> — открыть бот для всех на N часов\n"
             "/close — закрыть временный доступ"
         )
+    if BOT_REQUIRE_FULL_PLATE:
+        format_lines = [
+            "Форматы сообщения (марка и полный номер с регионом):\n",
+            "• мерс А121МР777\n",
+            "• А121МР77 BMW\n",
+            "• BMW А121МР77 серый\n",
+            "• BMW А 121 МР 77\n",
+        ]
+    else:
+        format_lines = [
+            "Форматы сообщения (марка и номер; регион необязателен):\n",
+            "• мерс А121МР\n",
+            "• А121МР BMW\n",
+            "• BMW А121МР77 (регион можно указать)\n",
+            "• BMW А 121 МР\n",
+        ]
     parts = [
-        "Форматы сообщения (марка и номер в любом порядке):\n",
-        "• мерс А121МР777\n",
-        "• А121МР77 BMW\n",
-        "• BMW А121МР77 серый\n",
-        "• BMW А 121 МР 77\n",
+        *format_lines,
         "• в две строки: BMW + номер\n",
         "• ссылка Яндекс Доставки (когда курьер уже назначен)\n\n",
         "После создания — кнопки «Изменить» и «Удалить».\n",
@@ -788,7 +813,9 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if editing_pass_id:
         try:
             models = client.get_vehicle_models()
-            parsed = parse_message(text, models)
+            parsed = parse_message(
+                text, models, require_full_plate=BOT_REQUIRE_FULL_PLATE
+            )
         except ParseError as e:
             await update.message.reply_text(str(e))
             return
@@ -797,11 +824,15 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         models = client.get_vehicle_models()
-        yandex_parsed = try_parse_yandex_or_raise(text, models)
+        yandex_parsed = try_parse_yandex_or_raise(
+            text, models, require_full_plate=BOT_REQUIRE_FULL_PLATE
+        )
         if yandex_parsed is not None:
             parsed = yandex_parsed
         else:
-            parsed = parse_message(text, models)
+            parsed = parse_message(
+                text, models, require_full_plate=BOT_REQUIRE_FULL_PLATE
+            )
     except ParseError as e:
         await update.message.reply_text(str(e))
         return
@@ -1003,12 +1034,14 @@ def main() -> None:
     else:
         mode = f"restricted ({len(ACCESS.all_allowed())} users)"
     log.info(
-        "Starting bot v%s (address: %s, ask_vtype=%s, confirm=%s, addr_picker=%s, llm_brand=%s, access: %s)",
+        "Starting bot v%s (address: %s, ask_vtype=%s, confirm=%s, addr_picker=%s, "
+        "full_plate=%s, llm_brand=%s, access: %s)",
         __version__,
         PASS24_ADDRESS_KEYWORD,
         BOT_ASK_VEHICLE_TYPE,
         BOT_CONFIRM_BEFORE_CREATE,
         BOT_ENABLE_ADDRESS_PICKER,
+        BOT_REQUIRE_FULL_PLATE,
         llm_enabled(),
         mode,
     )

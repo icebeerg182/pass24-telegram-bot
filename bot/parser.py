@@ -3,14 +3,28 @@ from dataclasses import dataclass
 
 from .brands import resolve_brand, suggest_brands
 
-# Госномер с необязательными пробелами между частями
-PLATE_FLEX_RE = re.compile(
-    r"(?i)"
-    r"([авекмнорстухabekmhopctyx])"
-    r"\s*(\d{3})"
-    r"\s*([авекмнорстухabekmhopctyx]{2})"
-    r"\s*(\d{2,3})"
+_PLATE_LETTERS = r"[авекмнорстухabekmhopctyx]"
+
+# Полный госномер: буква + 3 цифры + 2 буквы + регион (2–3)
+PLATE_FULL_RE = re.compile(
+    rf"(?i)"
+    rf"({_PLATE_LETTERS})"
+    rf"\s*(\d{{3}})"
+    rf"\s*({_PLATE_LETTERS}{{2}})"
+    rf"\s*(\d{{2,3}})"
 )
+
+# Без региона: буква + 3 цифры + 2 буквы (А121МР)
+PLATE_SHORT_RE = re.compile(
+    rf"(?i)"
+    rf"({_PLATE_LETTERS})"
+    rf"\s*(\d{{3}})"
+    rf"\s*({_PLATE_LETTERS}{{2}})"
+    rf"(?!\s*\d)"  # не съедать хвост полного номера
+)
+
+# Совместимость со старым именем
+PLATE_FLEX_RE = PLATE_FULL_RE
 
 CYR_TO_LAT = str.maketrans("АВЕКМНОРСТУХ", "ABEKMHOPCTYX")
 LAT_TO_CYR = str.maketrans("ABEKMHOPCTYX", "АВЕКМНОРСТУХ")
@@ -130,7 +144,7 @@ def _extract_brand_tokens(text: str, plate_match: re.Match) -> list[str]:
             if not token or _is_ignored_token(token):
                 continue
             compact = re.sub(r"\s+", "", token)
-            if PLATE_FLEX_RE.fullmatch(compact):
+            if PLATE_FULL_RE.fullmatch(compact) or PLATE_SHORT_RE.fullmatch(compact):
                 continue
             tokens.append(token)
 
@@ -187,18 +201,50 @@ def resolve_brand_from_verbose_name(
     return None
 
 
-def parse_message(text: str, pass24_models: dict[str, int]) -> ParsedPass:
+def find_plate_match(
+    text: str,
+    *,
+    require_full_plate: bool = True,
+) -> re.Match | None:
+    """Найти госномер: полный или (если разрешено) без региона."""
+    match = PLATE_FULL_RE.search(text)
+    if match:
+        return match
+    if not require_full_plate:
+        return PLATE_SHORT_RE.search(text)
+    return None
+
+
+def plate_format_hint(*, require_full_plate: bool = True) -> str:
+    if require_full_plate:
+        return (
+            "Формат: буква + 3 цифры + 2 буквы + регион\n"
+            "Примеры: А121МР777, BMW А121МР77, А121МР77 BMW"
+        )
+    return (
+        "Формат: буква + 3 цифры + 2 буквы (регион необязателен)\n"
+        "Примеры: А121МР, BMW А121МР77, мерс А 121 МР"
+    )
+
+
+def parse_message(
+    text: str,
+    pass24_models: dict[str, int],
+    *,
+    require_full_plate: bool = True,
+) -> ParsedPass:
     text = _normalize_text(text)
     if not text:
         raise ParseError("Пустое сообщение")
 
-    match = PLATE_FLEX_RE.search(text)
+    match = find_plate_match(text, require_full_plate=require_full_plate)
     if not match:
-        raise ParseError(
+        prefix = (
             "Не найден полный госномер.\n"
-            "Формат: буква + 3 цифры + 2 буквы + регион\n"
-            "Примеры: А121МР777, BMW А121МР77, А121МР77 BMW"
+            if require_full_plate
+            else "Не найден госномер.\n"
         )
+        raise ParseError(prefix + plate_format_hint(require_full_plate=require_full_plate))
 
     plate = normalize_plate("".join(match.groups()))
     tokens = _extract_brand_tokens(text, match)

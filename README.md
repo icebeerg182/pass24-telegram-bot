@@ -2,7 +2,7 @@
 
 Telegram-бот для заказа **автомобильных пропусков** через mobile API жителя [PASS24.online](https://pass24online.ru/).
 
-**Версия:** 0.0.5 · **Репозиторий:** [github.com/icebeerg182/pass24-telegram-bot](https://github.com/icebeerg182/pass24-telegram-bot)
+**Версия:** 0.0.6 · **Репозиторий:** [github.com/icebeerg182/pass24-telegram-bot](https://github.com/icebeerg182/pass24-telegram-bot)
 
 ## Для кого
 
@@ -10,7 +10,7 @@ Telegram-бот для заказа **автомобильных пропуск�
 
 ## Возможности
 
-- Пропуск одним сообщением: `BMW А121МР77`, `мерс А121МР777`, `маруся А123ВС77`, марка и номер в двух строках
+- Пропуск одним сообщением: `BMW А121МР77`, `мерс А121МР777`, `маруся А123ВС77`; для адресов без региона — `BMW А121МР`
 - Словарь сокращений марок + fallback через **Groq LLM**, если парсер не распознал бренд
 - Ссылка Яндекс Доставки (`dostavka.yandex.ru/route/#…`) — автоподстановка марки и номера курьера
 - Нормализация длинных названий (Wheely и т.п.): `Mercedes-Maybach S-Класс Z223, У 061 ЕН 550`
@@ -81,6 +81,7 @@ docker compose logs -f
 | `BOT_ASK_VEHICLE_TYPE` | `false` | Спрашивать легковой/грузовой |
 | `BOT_CONFIRM_BEFORE_CREATE` | `true` | Подтверждение перед созданием |
 | `BOT_ENABLE_ADDRESS_PICKER` | `false` | Кнопка «📍 Адрес» |
+| `BOT_REQUIRE_FULL_PLATE` | `true` | `true` — номер с регионом; `false` — достаточно `А121МР` |
 
 LLM fallback (опционально, [Groq](https://console.groq.com/)):
 

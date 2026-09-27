@@ -8,7 +8,12 @@ from dataclasses import dataclass
 
 import requests
 
-from bot.parser import ParseError, ParsedPass, normalize_plate
+from bot.parser import (
+    ParseError,
+    ParsedPass,
+    find_plate_match,
+    normalize_plate,
+)
 
 log = logging.getLogger("pass24-bot.yandex")
 
@@ -123,6 +128,8 @@ def vehicle_from_shared_route(
     data: dict,
     sharing_key: str,
     pass24_models: dict[str, int],
+    *,
+    require_full_plate: bool = True,
 ) -> YandexCourierVehicle:
     performer = data.get("performer") or {}
     model_raw = (performer.get("vehicle_model") or "").strip()
@@ -143,8 +150,14 @@ def vehicle_from_shared_route(
         )
 
     plate = normalize_plate(number_raw)
-    if len(plate) < 7:
+    match = find_plate_match(plate, require_full_plate=require_full_plate)
+    if not match:
+        if require_full_plate:
+            raise YandexDeliveryError(
+                f"Госномер из трекинга без региона или неверный: {number_raw}"
+            )
         raise YandexDeliveryError(f"Странный госномер из трекинга: {number_raw}")
+    plate = normalize_plate("".join(match.groups()))
 
     brand_token, brand_canonical = _resolve_brand_from_vehicle_model(
         model_raw or "Не задана",
@@ -164,6 +177,8 @@ def vehicle_from_shared_route(
 def parse_yandex_delivery_link(
     text: str,
     pass24_models: dict[str, int],
+    *,
+    require_full_plate: bool = True,
 ) -> ParsedPass | None:
     """Если в тексте share-ссылка Яндекс Доставки — вернуть ParsedPass, иначе None."""
     key = extract_sharing_key(text)
@@ -172,7 +187,9 @@ def parse_yandex_delivery_link(
 
     log.info("Yandex delivery link detected: %s", key)
     data = fetch_shared_route(key)
-    vehicle = vehicle_from_shared_route(data, key, pass24_models)
+    vehicle = vehicle_from_shared_route(
+        data, key, pass24_models, require_full_plate=require_full_plate
+    )
     return ParsedPass(
         brand_token=vehicle.brand_token,
         brand_canonical=vehicle.brand_canonical,
@@ -183,12 +200,16 @@ def parse_yandex_delivery_link(
 def try_parse_yandex_or_raise(
     text: str,
     pass24_models: dict[str, int],
+    *,
+    require_full_plate: bool = True,
 ) -> ParsedPass | None:
     """None если это не ссылка; ParseError/YandexDeliveryError при ошибке парсинга ссылки."""
     key = extract_sharing_key(text)
     if not key:
         return None
     try:
-        return parse_yandex_delivery_link(text, pass24_models)
+        return parse_yandex_delivery_link(
+            text, pass24_models, require_full_plate=require_full_plate
+        )
     except YandexDeliveryError as e:
         raise ParseError(str(e)) from e

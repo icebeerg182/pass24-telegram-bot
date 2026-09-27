@@ -276,6 +276,11 @@ prompt_bot_settings() {
 
   prompt_yes_no "Спрашивать подтверждение перед созданием пропуска?" BOT_CONFIRM_BEFORE_CREATE y
 
+  echo ""
+  echo "Некоторые адреса принимают номер без региона (А121МР),"
+  echo "другие требуют полный госномер (А121МР77 / А121МР777)."
+  prompt_yes_no "Требуется полный госномер с регионом для этого адреса?" BOT_REQUIRE_FULL_PLATE y
+
   if [ "${ADDRESS_COUNT:-0}" -gt 1 ]; then
     prompt_yes_no "Добавить кнопку выбора адреса по умолчанию?" BOT_ENABLE_ADDRESS_PICKER y
   else
@@ -305,6 +310,7 @@ PASS24_VEHICLE_TYPE_ID=
 BOT_ASK_VEHICLE_TYPE=$BOT_ASK_VEHICLE_TYPE
 BOT_CONFIRM_BEFORE_CREATE=$BOT_CONFIRM_BEFORE_CREATE
 BOT_ENABLE_ADDRESS_PICKER=$BOT_ENABLE_ADDRESS_PICKER
+BOT_REQUIRE_FULL_PLATE=$BOT_REQUIRE_FULL_PLATE
 EOF
   chmod 600 "$ENV_FILE"
   ok ".env создан"
@@ -345,7 +351,11 @@ print_done() {
   echo "Логи:    docker compose logs -f"
   echo "Статус:  docker compose ps"
   echo ""
-  echo "Проверка в Telegram: /start → BMW А121МР77"
+  if [ "${BOT_REQUIRE_FULL_PLATE:-true}" = "true" ]; then
+    echo "Проверка в Telegram: /start → BMW А121МР77"
+  else
+    echo "Проверка в Telegram: /start → BMW А121МР"
+  fi
 }
 
 main() {
