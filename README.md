@@ -18,7 +18,7 @@ Telegram-бот для заказа **автомобильных пропуск�
 - Управление доступом: белый список, временное открытие на 12/24/48 часов
 - Выбор адреса (`PASS24_ADDRESS_KEYWORD` или кнопка «📍 Адрес»)
 - Опционально: тип ТС (легковой/грузовой) и подтверждение перед созданием
-- **Яндекс Алиса:** голосовой заказ пропуска («мазда 656») через приватный навык
+- **Яндекс Алиса** и **Siri Shortcuts:** голосовой заказ пропуска («мазда 656»)
 
 ## Быстрый старт на сервере
 
@@ -112,6 +112,7 @@ LLM fallback (опционально, [Groq](https://console.groq.com/)):
 | [docs/DOCKER.md](docs/DOCKER.md) | Docker-команды и обновление |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Как устроен бот |
 | [docs/ALICE_SKILL.md](docs/ALICE_SKILL.md) | Навык Яндекс Алисы |
+| [docs/SIRI_SHORTCUT.md](docs/SIRI_SHORTCUT.md) | Siri Shortcut (iPhone) |
 | [CHANGELOG.md](CHANGELOG.md) | История версий |
 
 ## Структура проекта

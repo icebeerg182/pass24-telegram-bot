@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.10] — 2026-09-27
+
+### Добавлено
+
+- HTTP endpoint для Siri Shortcuts: `GET /siri/pass/<token>?q=мазда+656`
+- Документация [docs/SIRI_SHORTCUT.md](docs/SIRI_SHORTCUT.md)
+- Переменная `SIRI_WEBHOOK_TOKEN` (опционально, иначе как у Алисы)
+
 ## [0.0.9] — 2026-09-27
 
 ### Исправлено

@@ -23,6 +23,8 @@ BOT_REQUIRE_FULL_PLATE = _env_bool("BOT_REQUIRE_FULL_PLATE", default=True)
 ALICE_HOST = os.getenv("ALICE_HOST", "0.0.0.0")
 ALICE_PORT = int(os.getenv("ALICE_PORT", "8080"))
 ALICE_WEBHOOK_TOKEN = os.getenv("ALICE_WEBHOOK_TOKEN", "").strip()
+# Siri Shortcuts: отдельный токен или тот же, что у Алисы
+SIRI_WEBHOOK_TOKEN = os.getenv("SIRI_WEBHOOK_TOKEN", "").strip() or ALICE_WEBHOOK_TOKEN
 ALICE_SKILL_INVOCATION = os.getenv("ALICE_SKILL_INVOCATION", "пропуск пасс24").strip()
 
 ALICE_ALLOWED_USER_IDS = {
